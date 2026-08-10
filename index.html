@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CryptoDATEX · BTC Dashboard · Binance Futures</title>
+  <meta name="description" content="CryptoDATEX — Bitcoin BTCUSDT single chart dashboard + liquidation profile + TOP-10 correlated coins">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ HEADER ════════════════════════════════════════════════════ -->
+  <header id="header">
+    <div class="header-logo">
+      <img src="assets/logo.png" alt="CryptoDATEX" class="cdx-logo"
+           onerror="this.style.display='none';document.getElementById('cdx-text').style.display='flex'">
+      <div id="cdx-text" class="cdx-text-logo" style="display:none">
+        <div class="cdx-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M2 16 L7 10 L11 13 L16 6 L20 9" stroke="url(#g1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="16" cy="6" r="2.5" fill="url(#g1)"/>
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#f7931a"/>
+            </linearGradient></defs>
+          </svg>
+        </div>
+        <div><div class="cdx-brand-top">CRYPTO</div><div class="cdx-brand-bot">DATEX</div></div>
+      </div>
+    </div>
+    <div class="header-divider"></div>
+    <nav class="page-switcher" aria-label="Dashboard pages">
+      <a class="page-link active" data-path="/" href="/">Futures</a>
+      <a class="page-link" data-path="/options" href="/options">Options</a>
+      <a class="page-link" data-path="/orderbook" href="/orderbook">Order Book</a>
+    </nav>
+    <div class="header-divider"></div>
+
+    <!-- Timeframe selector buttons in Header -->
+    <div class="hdr-tf-bar" id="hdr-tf-bar">
+      <span class="tf-label-title">TF:</span>
+      <button class="tf-btn active" data-tf="5m">5m</button>
+      <button class="tf-btn" data-tf="15m">15m</button>
+      <button class="tf-btn" data-tf="30m">30m</button>
+      <button class="tf-btn" data-tf="1h">1h</button>
+      <button class="tf-btn" data-tf="4h">4h</button>
+      <button class="tf-btn" data-tf="1d">1d</button>
+    </div>
+
+    <div class="header-divider"></div>
+    <div class="price-display">
+      <div class="price-value" id="hdr-price">—</div>
+      <div class="price-change" id="hdr-change"></div>
+      <div class="price-sym" id="hdr-sym">BTCUSDT · PERP</div>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="world-clocks">
+      <div class="wc-item"><span class="wc-city">LOCAL</span><span class="wc-time" id="wc-local">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇬🇧</span><span class="wc-city">LON</span><span class="wc-time" id="wc-lon">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇨🇳</span><span class="wc-city">BEJ</span><span class="wc-time" id="wc-bej">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇺🇸</span><span class="wc-city">NYC</span><span class="wc-time" id="wc-nyc">--:--:--</span></div>
+    </div>
+    <div class="header-divider"></div>
+    <button class="btn-refresh" id="btn-telegram" title="Telegram-уведомления">
+      <span class="tg-dot" id="tg-dot"></span>
+      Telegram
+    </button>
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <button class="btn-refresh" id="btn-refresh" onclick="window.dashboard?.refreshAll()" title="Refresh">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 4v6h-6M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+  </header>
+
+  <!-- ══ WORKSPACE: charts-col | right-col ══════════════════════════ -->
+  <div id="workspace">
+
+    <!-- ── CENTER: Single Main Chart Panel ────────────────────────── -->
+    <div id="charts-col">
+
+      <div class="chart-panel" id="panel-main">
+        <div class="panel-header">
+          <span class="panel-tf" id="panel-tf-display">5m</span>
+          <span class="panel-instrument" id="panel-instrument">BTCUSDT PERP</span>
+          <div class="panel-ohlcv">
+            <span class="ohlcv-item">O:<span id="o-main">—</span></span>
+            <span class="ohlcv-item">H:<span id="h-main">—</span></span>
+            <span class="ohlcv-item">L:<span id="l-main">—</span></span>
+            <span class="ohlcv-item">C:<span id="c-main">—</span></span>
+            <span class="ohlcv-item vol">V:<span id="v-main">—</span></span>
+          </div>
+        </div>
+        <div class="chart-main" id="main-chart">
+          <div class="chart-info-overlay" id="chart-info-overlay"></div>
+        </div>
+        <div class="indicators-area">
+          <div class="indicator-tabs" id="tabs-main"></div>
+          <div class="ind-chart-wrap" id="ind-main"></div>
+        </div>
+        <div class="panel-loading hidden" id="loading-main">
+          <div class="spinner"></div><div class="loading-text">Binance Futures…</div>
+        </div>
+      </div>
+
+    </div><!-- #charts-col -->
+
+    <!-- ── RIGHT: indicator table + correlations ─────────────────── -->
+    <div id="right-col">
+
+      <!-- UNIFIED INDICATOR TABLE -->
+      <div id="ind-table-section">
+        <div class="section-hdr">
+          <span class="section-title">⚡ ИНДИКАТОРЫ · BINANCE FUTURES</span>
+          <span class="section-note" id="ind-ts"></span>
+        </div>
+        <div class="table-scroll">
+          <table id="ind-table">
+            <thead>
+              <tr>
+                <th class="th-tf">TF</th>
+                <th title="WaveTrend Momentum Oscillator">WTMO</th>
+                <th title="Machine Learning Momentum Index (kNN)">MLMI</th>
+                <th title="Relative Strength Index (14)">RSI</th>
+                <th title="Money Flow Index (14)">MFI</th>
+                <th title="Commodity Channel Index (20)">CCI</th>
+                <th title="Williams Percent Range (14)">W%R</th>
+                <th title="Ultimate Oscillator (7/14/28)">UO</th>
+                <th title="Avg Directional Index (14)">ADX</th>
+                <th title="Directional Movement + (14)">DM+</th>
+                <th title="Directional Movement − (14)">DM−</th>
+                <th title="Chaikin Money Flow (20)">CMF</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="itr-5m">
+                <td class="tf-label">5m</td>
+                <td class="ind-cell" id="tc-5m-wt1">—</td>
+                <td class="ind-cell" id="tc-5m-mlmi">—</td>
+                <td class="ind-cell" id="tc-5m-rsi">—</td>
+                <td class="ind-cell" id="tc-5m-mfi">—</td>
+                <td class="ind-cell" id="tc-5m-cci">—</td>
+                <td class="ind-cell" id="tc-5m-willr">—</td>
+                <td class="ind-cell" id="tc-5m-uo">—</td>
+                <td class="ind-cell" id="tc-5m-adx">—</td>
+                <td class="ind-cell" id="tc-5m-dmp">—</td>
+                <td class="ind-cell" id="tc-5m-dmm">—</td>
+                <td class="ind-cell" id="tc-5m-cmf">—</td>
+              </tr>
+              <tr id="itr-15m">
+                <td class="tf-label">15m</td>
+                <td class="ind-cell" id="tc-15m-wt1">—</td>
+                <td class="ind-cell" id="tc-15m-mlmi">—</td>
+                <td class="ind-cell" id="tc-15m-rsi">—</td>
+                <td class="ind-cell" id="tc-15m-mfi">—</td>
+                <td class="ind-cell" id="tc-15m-cci">—</td>
+                <td class="ind-cell" id="tc-15m-willr">—</td>
+                <td class="ind-cell" id="tc-15m-uo">—</td>
+                <td class="ind-cell" id="tc-15m-adx">—</td>
+                <td class="ind-cell" id="tc-15m-dmp">—</td>
+                <td class="ind-cell" id="tc-15m-dmm">—</td>
+                <td class="ind-cell" id="tc-15m-cmf">—</td>
+              </tr>
+              <tr id="itr-30m">
+                <td class="tf-label">30m</td>
+                <td class="ind-cell" id="tc-30m-wt1">—</td>
+                <td class="ind-cell" id="tc-30m-mlmi">—</td>
+                <td class="ind-cell" id="tc-30m-rsi">—</td>
+                <td class="ind-cell" id="tc-30m-mfi">—</td>
+                <td class="ind-cell" id="tc-30m-cci">—</td>
+                <td class="ind-cell" id="tc-30m-willr">—</td>
+                <td class="ind-cell" id="tc-30m-uo">—</td>
+                <td class="ind-cell" id="tc-30m-adx">—</td>
+                <td class="ind-cell" id="tc-30m-dmp">—</td>
+                <td class="ind-cell" id="tc-30m-dmm">—</td>
+                <td class="ind-cell" id="tc-30m-cmf">—</td>
+              </tr>
+              <tr id="itr-1h">
+                <td class="tf-label">1h</td>
+                <td class="ind-cell" id="tc-1h-wt1">—</td>
+                <td class="ind-cell" id="tc-1h-mlmi">—</td>
+                <td class="ind-cell" id="tc-1h-rsi">—</td>
+                <td class="ind-cell" id="tc-1h-mfi">—</td>
+                <td class="ind-cell" id="tc-1h-cci">—</td>
+                <td class="ind-cell" id="tc-1h-willr">—</td>
+                <td class="ind-cell" id="tc-1h-uo">—</td>
+                <td class="ind-cell" id="tc-1h-adx">—</td>
+                <td class="ind-cell" id="tc-1h-dmp">—</td>
+                <td class="ind-cell" id="tc-1h-dmm">—</td>
+                <td class="ind-cell" id="tc-1h-cmf">—</td>
+              </tr>
+              <tr id="itr-4h">
+                <td class="tf-label">4h</td>
+                <td class="ind-cell" id="tc-4h-wt1">—</td>
+                <td class="ind-cell" id="tc-4h-mlmi">—</td>
+                <td class="ind-cell" id="tc-4h-rsi">—</td>
+                <td class="ind-cell" id="tc-4h-mfi">—</td>
+                <td class="ind-cell" id="tc-4h-cci">—</td>
+                <td class="ind-cell" id="tc-4h-willr">—</td>
+                <td class="ind-cell" id="tc-4h-uo">—</td>
+                <td class="ind-cell" id="tc-4h-adx">—</td>
+                <td class="ind-cell" id="tc-4h-dmp">—</td>
+                <td class="ind-cell" id="tc-4h-dmm">—</td>
+                <td class="ind-cell" id="tc-4h-cmf">—</td>
+              </tr>
+              <tr id="itr-1d">
+                <td class="tf-label">1d</td>
+                <td class="ind-cell" id="tc-1d-wt1">—</td>
+                <td class="ind-cell" id="tc-1d-mlmi">—</td>
+                <td class="ind-cell" id="tc-1d-rsi">—</td>
+                <td class="ind-cell" id="tc-1d-mfi">—</td>
+                <td class="ind-cell" id="tc-1d-cci">—</td>
+                <td class="ind-cell" id="tc-1d-willr">—</td>
+                <td class="ind-cell" id="tc-1d-uo">—</td>
+                <td class="ind-cell" id="tc-1d-adx">—</td>
+                <td class="ind-cell" id="tc-1d-dmp">—</td>
+                <td class="ind-cell" id="tc-1d-dmm">—</td>
+                <td class="ind-cell" id="tc-1d-cmf">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div><!-- #ind-table-section -->
+
+      <!-- CORRELATION PANEL -->
+      <div id="corr-section">
+        <div class="section-hdr">
+          <span class="section-title">🔗 TOP-10 КОРРЕЛЯЦИЯ С BTC · 1h</span>
+          <button class="btn-sm" onclick="window.dashboard?.refreshCorr()" title="Обновить корреляции">↻ обновить</button>
+        </div>
+        <div class="corr-legend">
+          <span>Символ</span><span>Корреляция</span><span>24h</span><span>Цена</span>
+        </div>
+        <div id="corr-list">
+          <div class="corr-loading">Вычисляем корреляцию…</div>
+        </div>
+        <div class="corr-footer" id="corr-ts">—</div>
+      </div><!-- #corr-section -->
+
+      <!-- MACRO EVENTS — 2-day window, pageable by day, viewer's local timezone -->
+      <div id="macro-section">
+        <div class="section-hdr">
+          <span class="section-title">📅 МАКРО</span>
+          <div class="macro-nav">
+            <button class="btn-sm" id="macro-prev" onclick="window.Macro?.shift(-1)" title="День назад">‹</button>
+            <span class="macro-range" id="macro-range">Сегодня и завтра</span>
+            <button class="btn-sm" id="macro-next" onclick="window.Macro?.shift(1)" title="День вперёд">›</button>
+            <button class="btn-sm" onclick="window.Macro?.refresh(true)" title="Обновить календарь">↻</button>
+          </div>
+        </div>
+        <div id="macro-list">
+          <div class="macro-loading">Загружаем календарь…</div>
+        </div>
+        <div class="macro-footer" id="macro-ts">—</div>
+      </div><!-- #macro-section -->
+
+    </div><!-- #right-col -->
+
+  </div><!-- #workspace -->
+
+  <!-- ══ STATUS BAR ══════════════════════════════════════════════════ -->
+  <div id="statusbar">
+    <div class="status-item"><div class="dot" id="s-api-dot"></div><span id="s-api-txt">REST: connecting…</span></div>
+    <div class="status-item"><div class="dot err" id="s-ws-dot"></div><span id="s-ws-txt">WS: connecting…</span></div>
+    <div class="status-item"><div class="dot warn" id="s-data-dot"></div><span id="s-data-txt">Data: loading</span></div>
+    <div class="status-item"><span style="color:var(--text-dim)">Refresh:</span><span style="color:var(--blue)" id="s-next">30s</span></div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:10px;font-family:'JetBrains Mono',monospace">
+      <span style="color:var(--text-sec)">SRC:</span>
+      <span style="color:var(--btc-orange)">BINANCE FUTURES</span>
+      <span style="color:var(--text-dim)" id="status-time"></span>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script src="js/zones.js"></script>
+<script src="js/ruler.js"></script>
+<script src="js/macro.js"></script>
+<script src="js/telegram-ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "token": "8980305915:AAGX26V61zEycbTzwrY5mHHwELBhcktdV4c",
+  "chat_id": "-1003667241526",
+  "symbol": "BTCUSDT",
+  "interval": "5m",
+  "vol_multiple": 2.0,
+  "vol_buy_ratio": 0.7,
+  "vol_ma_length": 20,
+  "notify_volume": true,
+  "notify_macro": true,
+  "macro_lead_minutes": 15
+}

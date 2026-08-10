@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CryptoDATEX · ETH Zones · 5m</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#0f141c; --panel2:#131a24; --border:#1d2531;
+  --text:#d6dde8; --text-sec:#8b95a5; --text-dim:#5a6472;
+  --up:#26a69a; --down:#ef5350;
+  --eth:#627eea; --eth-dim:#3d4d8f;
+  --gold:#f0b90b; --cyan:#00d4ff;
+  --above:#627eea; --below:#e0864a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;
+  font-size:12px;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* header */
+#header{display:flex;align-items:center;gap:14px;height:46px;padding:0 16px;
+  background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.5px}
+.brand .eth-mark{width:20px;height:20px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--eth),var(--eth-dim));border-radius:5px;
+  font-size:11px;color:#fff}
+.brand .b1{color:var(--text)}.brand .b2{color:var(--eth)}
+.hdiv{width:1px;height:22px;background:var(--border)}
+.instr{color:var(--text-sec);font-size:11px;letter-spacing:1px}
+.price{display:flex;align-items:baseline;gap:8px}
+.price .val{font-size:18px;font-weight:700}
+.price .chg{font-size:11px;font-weight:600}
+.spacer{margin-left:auto}
+.toggle{display:flex;align-items:center;gap:7px;color:var(--text-sec);cursor:pointer;
+  user-select:none;font-size:11px}
+.toggle input{display:none}
+.toggle .sw{width:30px;height:16px;border-radius:8px;background:var(--border);
+  position:relative;transition:.15s}
+.toggle .sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;
+  border-radius:50%;background:var(--text-dim);transition:.15s}
+.toggle input:checked + .sw{background:var(--eth-dim)}
+.toggle input:checked + .sw::after{left:16px;background:var(--eth)}
+.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text-sec);
+  font-family:inherit;font-size:11px;padding:6px 11px;border-radius:5px;cursor:pointer;
+  display:flex;align-items:center;gap:6px;transition:.12s}
+.btn:hover{border-color:var(--eth-dim);color:var(--text)}
+
+/* main */
+#main{flex:1;display:flex;min-height:0}
+#chart-wrap{flex:1;position:relative;min-width:0}
+#chart{position:absolute;inset:0}
+#overlay{position:absolute;inset:0;pointer-events:none}
+#vp-tag{position:absolute;left:10px;top:8px;font-size:9px;letter-spacing:1px;
+  color:var(--text-dim);pointer-events:none}
+#vp-tag b{color:var(--eth)}
+
+/* zones panel */
+#zones{width:288px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto}
+.zgroup-hdr{padding:9px 14px;font-size:10px;letter-spacing:1.5px;color:var(--text-dim);
+  border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);z-index:2;
+  display:flex;justify-content:space-between}
+.zgroup-hdr.above b{color:var(--above)}
+.zgroup-hdr.below b{color:var(--below)}
+.zone{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s}
+.zone:hover{background:var(--panel2)}
+.zone.active{background:var(--panel2);box-shadow:inset 3px 0 0 var(--gold)}
+.zrow1{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.zprice{font-size:14px;font-weight:700}
+.zdist{font-size:10px;color:var(--text-sec)}
+.zbar-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:3px}
+.zbar{height:100%;border-radius:3px}
+.zone.a .zbar{background:linear-gradient(90deg,var(--eth-dim),var(--above))}
+.zone.b .zbar{background:linear-gradient(90deg,#8a5433,var(--below))}
+.zstrength{font-size:9px;color:var(--text-dim)}
+.zsessions{margin-top:8px;display:none;flex-direction:column;gap:5px}
+.zone.active .zsessions{display:flex}
+.sess{display:flex;justify-content:space-between;align-items:center;font-size:10px;
+  padding:5px 7px;background:var(--bg);border-radius:4px;border-left:2px solid var(--gold)}
+.sess .t{color:var(--text-sec)}
+.sess .f{color:var(--gold);font-weight:600}
+.zhint{font-size:9px;color:var(--text-dim);margin-top:6px;display:none}
+.zone.active .zhint{display:block}
+
+/* status */
+#status{display:flex;align-items:center;gap:16px;height:26px;padding:0 16px;
+  background:var(--panel);border-top:1px solid var(--border);font-size:10px;
+  color:var(--text-dim);flex-shrink:0}
+.st{display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim)}
+.dot.ok{background:var(--up)}.dot.err{background:var(--down)}.dot.warn{background:var(--gold)}
+.st .src{color:var(--eth)}
+.right{margin-left:auto;color:var(--text-dim)}
+
+#loading{position:absolute;inset:0;display:grid;place-items:center;background:var(--bg);z-index:10}
+.spin{width:26px;height:26px;border:2px solid var(--border);border-top-color:var(--eth);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <div class="brand">
+      <div class="eth-mark">Ξ</div>
+      <span class="b1">CRYPTO</span><span class="b2">DATEX</span>
+    </div>
+    <div class="hdiv"></div>
+    <span class="instr">ETHUSDT · PERP · 5m</span>
+    <div class="hdiv"></div>
+    <div class="price"><span class="val" id="hdr-price">—</span><span class="chg" id="hdr-chg"></span></div>
+    <div class="spacer"></div>
+    <label class="toggle" title="Затухание старого объёма (48ч half-life). Выключи, чтобы бары совпали с raw VPVR на TradingView.">
+      <input type="checkbox" id="decay-toggle" checked><span class="sw"></span>decay 48h
+    </label>
+    <button class="btn" id="btn-refresh">↻ обновить</button>
+  </header>
+
+  <div id="main">
+    <div id="chart-wrap">
+      <div id="chart"></div>
+      <canvas id="overlay"></canvas>
+      <div id="vp-tag">VOLUME PROFILE · <b>3d</b> · <span id="vp-mode">decayed</span></div>
+      <div id="loading"><div class="spin"></div></div>
+    </div>
+
+    <aside id="zones">
+      <div class="zgroup-hdr above"><span>ЗОНЫ <b>ВЫШЕ</b> ЦЕНЫ</span><span>сила</span></div>
+      <div id="zones-above"></div>
+      <div class="zgroup-hdr below"><span>ЗОНЫ <b>НИЖЕ</b> ЦЕНЫ</span><span>сила</span></div>
+      <div id="zones-below"></div>
+    </aside>
+  </div>
+
+  <div id="status">
+    <div class="st"><div class="dot" id="s-dot"></div><span id="s-txt">connecting…</span></div>
+    <div class="st"><span>bins:</span><span id="s-bins">—</span></div>
+    <div class="st"><span>bin size:</span><span id="s-binsize">—</span></div>
+    <div class="st"><span>candles:</span><span id="s-candles">—</span></div>
+    <div class="right">SRC: <span class="src">BINANCE FUTURES</span> · <span id="s-time">—</span></div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════ CONFIG ══════════════════
+const CFG = {
+  symbol:'ETHUSDT', interval:'5m', base:'https://fapi.binance.com',
+  lookbackH:72, nBins:150, decayHalflifeH:48,
+  smoothBins:3, minPeakFrac:0.15, mergeBins:2, topN:3,
+  zoneHalfwidthBins:2, sessionGapMin:90, topSessions:3,
+  autoRefreshS:60
+};
+
+// ══════════════════ MATH (порт из Python) ══════════════════
+function computeProfiles(kl){
+  let pMin=Infinity, pMax=-Infinity;
+  for(const k of kl){ if(k.low<pMin)pMin=k.low; if(k.high>pMax)pMax=k.high; }
+  const binSize=(pMax-pMin)/CFG.nBins;
+  const raw=new Float64Array(CFG.nBins), dec=new Float64Array(CFG.nBins);
+  const nowMs=Date.now(), hlMs=CFG.decayHalflifeH*3600e3;
+  for(const k of kl){
+    let lo=Math.floor((k.low-pMin)/binSize), hi=Math.floor((k.high-pMin)/binSize);
+    lo=Math.max(0,lo); hi=Math.min(CFG.nBins-1,hi);
+    const span=hi-lo+1, per=k.volume/span;
+    const w=Math.pow(0.5,(nowMs-k.time*1000)/hlMs), perD=per*w;
+    for(let b=lo;b<=hi;b++){ raw[b]+=per; dec[b]+=perD; }
+  }
+  return {raw,dec,binSize,pMin,pMax};
+}
+
+function findHVN(v,prof){
+  const n=v.length;
+  let vs=v;
+  if(CFG.smoothBins>1){
+    vs=new Float64Array(n); const h=Math.floor(CFG.smoothBins/2);
+    for(let i=0;i<n;i++){let s=0,c=0;for(let j=i-h;j<=i+h;j++){if(j>=0&&j<n){s+=v[j];c++;}}vs[i]=s/c;}
+  }
+  let mx=0; for(const x of vs) if(x>mx)mx=x;
+  const thr=CFG.minPeakFrac*mx;
+  let peaks=[];
+  for(let i=1;i<n-1;i++){
+    if(vs[i]>=vs[i-1]&&vs[i]>=vs[i+1]&&vs[i]>=thr)
+      peaks.push({bin:i, price:prof.pMin+(i+0.5)*prof.binSize, vol:v[i]});
+  }
+  peaks.sort((a,b)=>a.bin-b.bin);
+  const merged=[];
+  for(const p of peaks){
+    const last=merged[merged.length-1];
+    if(last&&p.bin-last.bin<=CFG.mergeBins){ if(p.vol>last.vol)merged[merged.length-1]=p; }
+    else merged.push(p);
+  }
+  return merged;
+}
+
+function splitZones(peaks,price){
+  const above=peaks.filter(p=>p.price>price).sort((a,b)=>b.vol-a.vol).slice(0,CFG.topN);
+  const below=peaks.filter(p=>p.price<price).sort((a,b)=>b.vol-a.vol).slice(0,CFG.topN);
+  return {above,below};
+}
+
+// время-атрибуция — ВСЕГДА raw (чтобы совпало с TV)
+function attributeTime(kl,peakBin,prof){
+  const zlo=peakBin-CFG.zoneHalfwidthBins, zhi=peakBin+CFG.zoneHalfwidthBins;
+  const c=[];
+  for(const k of kl){
+    let lo=Math.floor((k.low-prof.pMin)/prof.binSize), hi=Math.floor((k.high-prof.pMin)/prof.binSize);
+    const span=hi-lo+1;
+    const ov=Math.min(hi,zhi)-Math.max(lo,zlo)+1;
+    if(ov>0) c.push([k.time, k.volume*ov/span]);
+  }
+  if(!c.length) return [];
+  c.sort((a,b)=>a[0]-b[0]);
+  const gap=CFG.sessionGapMin*60;
+  let sess=[], cs=c[0][0], ce=c[0][0], sum=c[0][1];
+  for(let i=1;i<c.length;i++){
+    const [t,vv]=c[i];
+    if(t-ce>gap){ sess.push([cs,ce,sum]); cs=t; sum=0; }
+    ce=t; sum+=vv;
+  }
+  sess.push([cs,ce,sum]);
+  const tot=sess.reduce((a,s)=>a+s[2],0);
+  sess.sort((a,b)=>b[2]-a[2]);
+  return sess.slice(0,CFG.topSessions).map(s=>({start:s[0],end:s[1],frac:s[2]/tot}));
+}
+
+// ══════════════════ DATA ══════════════════
+async function fetchKlines(){
+  const limit=Math.min(1500, Math.ceil(CFG.lookbackH*60/5)+2);
+  const url=`${CFG.base}/fapi/v1/klines?symbol=${CFG.symbol}&interval=${CFG.interval}&limit=${limit}`;
+  const r=await fetch(url);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const raw=await r.json();
+  return raw.map(k=>({time:Math.floor(k[0]/1000), open:+k[1], high:+k[2],
+    low:+k[3], close:+k[4], volume:+k[5]}));
+}
+
+// ══════════════════ STATE ══════════════════
+let chart, candleSeries, volSeries, klines=[], prof=null, zones={above:[],below:[]};
+let priceLines=[], activeZone=null, zoneBinSet=new Set();
+const $=id=>document.getElementById(id);
+const fmt=t=>{const d=new Date(t*1000);
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+const fmtP=p=>p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// ══════════════════ CHART ══════════════════
+function initChart(){
+  const el=$('chart');
+  chart=LightweightCharts.createChart(el,{
+    layout:{background:{color:'#0a0e14'},textColor:'#8b95a5',fontFamily:"'JetBrains Mono',monospace",fontSize:10},
+    grid:{vertLines:{color:'rgba(29,37,49,.5)'},horzLines:{color:'rgba(29,37,49,.5)'}},
+    rightPriceScale:{borderColor:'#1d2531',scaleMargins:{top:.08,bottom:.24}},
+    timeScale:{borderColor:'#1d2531',timeVisible:true,secondsVisible:false},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,
+      vertLine:{color:'#3d4d8f',width:1,style:2,labelBackgroundColor:'#627eea'},
+      horzLine:{color:'#3d4d8f',width:1,style:2,labelBackgroundColor:'#627eea'}},
+    handleScroll:true,handleScale:true
+  });
+  candleSeries=chart.addCandlestickSeries({
+    upColor:'#26a69a',downColor:'#ef5350',wickUpColor:'#26a69a',wickDownColor:'#ef5350',
+    borderVisible:false,priceLineVisible:true,priceLineColor:'#627eea',priceLineStyle:2});
+  volSeries=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',
+    color:'rgba(98,126,234,.28)'});
+  chart.priceScale('vol').applyOptions({scaleMargins:{top:.82,bottom:0}});
+
+  chart.timeScale().subscribeVisibleTimeRangeChange(redrawOverlay);
+  new ResizeObserver(()=>{sizeOverlay();redrawOverlay();}).observe(el);
+}
+
+// ══════════════════ OVERLAY (volume profile + подсветка времени) ══════════════════
+const cv=$('overlay'); const ctx=cv.getContext('2d');
+function sizeOverlay(){
+  const r=$('chart').getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  cv.style.width=r.width+'px'; cv.style.height=r.height+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function redrawOverlay(){
+  if(!prof) return;
+  const r=$('chart').getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  const active=$('decay-toggle').checked?prof.dec:prof.raw;
+  let mx=0; for(const x of active) if(x>mx)mx=x;
+  const barMaxW=r.width*0.30;
+
+  // 1) горизонтальные бары профиля (left-anchored, translucent)
+  for(let i=0;i<active.length;i++){
+    const pc=prof.pMin+(i+0.5)*prof.binSize;
+    const y=candleSeries.priceToCoordinate(pc);
+    if(y===null) continue;
+    const yEdge=candleSeries.priceToCoordinate(prof.pMin+(i+1)*prof.binSize);
+    let bh=(yEdge===null)?2:Math.abs(y-yEdge); if(bh<1)bh=1;
+    const w=(active[i]/mx)*barMaxW;
+    ctx.fillStyle=zoneBinSet.has(i)?'rgba(98,126,234,.55)':'rgba(98,126,234,.12)';
+    ctx.fillRect(0,y-bh/2,w,bh-0.5);
+  }
+
+  // 2) зоны-полосы (band fill) во всю ширину
+  const drawBand=(z,color)=>{
+    const yHi=candleSeries.priceToCoordinate(z.price+prof.binSize*3);
+    const yLo=candleSeries.priceToCoordinate(z.price-prof.binSize*3);
+    if(yHi===null||yLo===null) return;
+    ctx.fillStyle=color; ctx.fillRect(0,yHi,r.width,yLo-yHi);
+  };
+  zones.above.forEach(z=>drawBand(z,'rgba(98,126,234,.06)'));
+  zones.below.forEach(z=>drawBand(z,'rgba(224,134,74,.06)'));
+
+  // 3) подсветка time-sessions активной зоны (вертикальные полосы)
+  if(activeZone&&activeZone._sessions){
+    for(const s of activeZone._sessions){
+      let x1=chart.timeScale().timeToCoordinate(s.start);
+      let x2=chart.timeScale().timeToCoordinate(s.end);
+      if(x1===null&&x2===null) continue;
+      if(x1===null)x1=0; if(x2===null)x2=r.width;
+      const grad=ctx.createLinearGradient(0,0,0,r.height);
+      grad.addColorStop(0,'rgba(240,185,11,.14)'); grad.addColorStop(1,'rgba(240,185,11,.04)');
+      ctx.fillStyle=grad; ctx.fillRect(x1,0,Math.max(2,x2-x1),r.height);
+      ctx.strokeStyle='rgba(240,185,11,.35)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x1,0); ctx.lineTo(x1,r.height);
+      ctx.moveTo(x2,0); ctx.lineTo(x2,r.height); ctx.stroke();
+    }
+  }
+}
+
+// ══════════════════ ZONES: priceLines + panel ══════════════════
+function drawZoneLines(){
+  priceLines.forEach(pl=>candleSeries.removePriceLine(pl)); priceLines=[];
+  const vmax=Math.max(1,...[...zones.above,...zones.below].map(z=>z.vol));
+  const mk=(z,side)=>{
+    const pct=Math.round(z.vol/vmax*100);
+    priceLines.push(candleSeries.createPriceLine({
+      price:z.price, color:side==='a'?'#627eea':'#e0864a', lineWidth:1, lineStyle:2,
+      axisLabelVisible:true, title:`${pct}%`}));
+  };
+  zones.above.forEach(z=>mk(z,'a')); zones.below.forEach(z=>mk(z,'b'));
+}
+
+function buildPanel(){
+  const vmax=Math.max(1,...[...zones.above,...zones.below].map(z=>z.vol));
+  const price=klines[klines.length-1].close;
+  const row=(z,side)=>{
+    z._sessions=attributeTime(klines,z.bin,prof);
+    const pct=Math.round(z.vol/vmax*100);
+    const dist=((z.price-price)/price*100).toFixed(2);
+    const sess=z._sessions.map(s=>
+      `<div class="sess"><span class="t">${fmt(s.start)} → ${fmt(s.end)}</span><span class="f">${Math.round(s.frac*100)}%</span></div>`).join('');
+    return `<div class="zone ${side}" data-key="${side}${z.bin}">
+      <div class="zrow1"><span class="zprice">${fmtP(z.price)}</span>
+        <span class="zdist">${dist>0?'+':''}${dist}%</span></div>
+      <div class="zbar-wrap"><div class="zbar" style="width:${pct}%"></div></div>
+      <div class="zstrength">сила ${pct}% · bin #${z.bin}</div>
+      <div class="zsessions">${sess}</div>
+      <div class="zhint">↑ подсвечено на графике · время в твоём поясе (совпадает с TV)</div>
+    </div>`;
+  };
+  $('zones-above').innerHTML=zones.above.map(z=>row(z,'a')).join('')||'<div class="zone">нет зон в окне</div>';
+  $('zones-below').innerHTML=zones.below.map(z=>row(z,'b')).join('')||'<div class="zone">нет зон в окне</div>';
+
+  document.querySelectorAll('.zone[data-key]').forEach(el=>{
+    el.onclick=()=>{
+      const key=el.dataset.key;
+      const all=[...zones.above.map(z=>['a'+z.bin,z]),...zones.below.map(z=>['b'+z.bin,z])];
+      const found=all.find(([k])=>k===key);
+      if(activeZone===found?.[1]){ activeZone=null; el.classList.remove('active'); }
+      else{
+        document.querySelectorAll('.zone').forEach(z=>z.classList.remove('active'));
+        el.classList.add('active'); activeZone=found?.[1];
+      }
+      redrawOverlay();
+    };
+  });
+}
+
+// ══════════════════ PIPELINE ══════════════════
+function recompute(){
+  prof=computeProfiles(klines);
+  const active=$('decay-toggle').checked?prof.dec:prof.raw;
+  const peaks=findHVN(active,prof);
+  const price=klines[klines.length-1].close;
+  zones=splitZones(peaks,price);
+  zoneBinSet=new Set();
+  [...zones.above,...zones.below].forEach(z=>{
+    for(let b=z.bin-CFG.zoneHalfwidthBins;b<=z.bin+CFG.zoneHalfwidthBins;b++) zoneBinSet.add(b);
+  });
+  activeZone=null;
+  $('vp-mode').textContent=$('decay-toggle').checked?'decayed':'raw (=TV)';
+  $('s-bins').textContent=CFG.nBins;
+  $('s-binsize').textContent='$'+prof.binSize.toFixed(2);
+  $('s-candles').textContent=klines.length;
+  drawZoneLines(); buildPanel(); redrawOverlay();
+}
+
+function updateHeader(){
+  const last=klines[klines.length-1], first=klines[0];
+  $('hdr-price').textContent=fmtP(last.close);
+  const chg=(last.close-first.open)/first.open*100;
+  const el=$('hdr-chg');
+  el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'% · 3d';
+  el.style.color=chg>=0?'var(--up)':'var(--down)';
+}
+
+async function load(){
+  try{
+    $('s-dot').className='dot warn'; $('s-txt').textContent='loading…';
+    klines=await fetchKlines();
+    candleSeries.setData(klines.map(k=>({time:k.time,open:k.open,high:k.high,low:k.low,close:k.close})));
+    volSeries.setData(klines.map(k=>({time:k.time,value:k.volume,
+      color:k.close>=k.open?'rgba(38,166,154,.3)':'rgba(239,83,80,.3)'})));
+    sizeOverlay(); recompute(); updateHeader();
+    $('loading').style.display='none';
+    $('s-dot').className='dot ok'; $('s-txt').textContent='live';
+    $('s-time').textContent=new Date().toLocaleTimeString();
+  }catch(e){
+    $('s-dot').className='dot err'; $('s-txt').textContent='ошибка: '+e.message;
+    $('loading').style.display='none';
+    console.error(e);
+  }
+}
+
+// ══════════════════ BOOT ══════════════════
+initChart();
+$('decay-toggle').onchange=()=>{ if(prof){recompute();} };
+$('btn-refresh').onclick=load;
+load();
+setInterval(load, CFG.autoRefreshS*1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile macro.py)",
+      "Bash(./.venv/Scripts/python.exe --version)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile server.py)",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=11512 or ProcessId=17224\")",
+      "PowerShell(Get-Process -Id 17224,11512 -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 11512 -Force -ErrorAction SilentlyContinue)",
+      "Bash(./.venv/Scripts/python.exe \"C:\\\\Users\\\\00000\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--GRAPH\\\\d508f816-a5b3-45e6-bcc8-cd6b1c3536c1\\\\scratchpad\\\\test_liqmap_route.py\")",
+      "Bash(node tests/zones.test.mjs)",
+      "Bash(node -e \"require\\('./js/zones.js'\\); console.log\\('zones.js loads OK \\(module scope\\)'\\);\")",
+      "Bash(node --check js/zones.js)",
+      "Bash(node --check js/main.js)",
+      "Bash(node --check js/macro.js)",
+      "Bash(node -e ' *)",
+      "Bash(./.venv/Scripts/python.exe \"C:\\\\Users\\\\00000\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--GRAPH\\\\d508f816-a5b3-45e6-bcc8-cd6b1c3536c1\\\\scratchpad\\\\test_full_app.py\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_server.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pip install -q pytest)"
+    ]
+  }
+}

@@ -1,0 +1,281 @@
+  <div id="depth-section">
+    <div id="dh-container">
+      <div class="dh-title">📊 ORDER BOOK DEPTH · VOLUME DELTA · TOP TRADERS</div>
+        <div id="controls">
+            <input type="text" id="symbol" placeholder="Symbol (e.g. btcusdt)" value="btcusdt" readonly title="Tracked continuously by the backend — see note below">
+            <select id="snapshot-limit">
+                <option value="100">Depth: 100</option>
+                <option value="500" selected>Depth: 500</option>
+                <option value="1000">Depth: 1000 (max)</option>
+            </select>
+            <button id="connect-btn">Start viewing</button>
+            <button id="disconnect-btn" disabled>Pause viewing</button>
+
+            <div class="info-note">
+                * The backend tracks this order book continuously from the moment the server starts — even when
+                this page is closed. These buttons only start/stop the chart's live view; history keeps accumulating
+                either way. <span id="tracking-since"></span>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; background: #151515; border-radius: 5px;">
+                <strong>⏰ Timezone (UTC):</strong>
+                <select id="timezone-selector" style="margin-left: 10px;">
+                    <option value="0" selected>UTC+0 (London)</option>
+                    <option value="-4">UTC-4 (New York EDT)</option>
+                    <option value="-5">UTC-5 (New York EST)</option>
+                    <option value="-7">UTC-7 (Los Angeles PDT)</option>
+                    <option value="-8">UTC-8 (Los Angeles PST)</option>
+                    <option value="1">UTC+1 (Berlin, Paris)</option>
+                    <option value="2">UTC+2 (Athens, Helsinki)</option>
+                    <option value="3">UTC+3 (Moscow, Istanbul, EEST)</option>
+                    <option value="4">UTC+4 (Dubai)</option>
+                    <option value="5">UTC+5 (Karachi)</option>
+                    <option value="8">UTC+8 (Singapore, Hong Kong)</option>
+                    <option value="9">UTC+9 (Tokyo, Seoul)</option>
+                    <option value="10">UTC+10 (Sydney)</option>
+                    <option value="-10">UTC-10 (Honolulu)</option>
+                </select>
+                <span id="current-timezone-display" style="margin-left: 15px; color: #26a69a; font-weight: bold;">UTC+0</span>
+            </div>
+            
+            <div id="timeframe-selector">
+                <strong>Timeframe:</strong><br>
+                <button class="tf-button realtime active" data-tf="0">C (current)</button>
+                <button class="tf-button" data-tf="1">1m</button>
+                <button class="tf-button" data-tf="5">5m</button>
+                <button class="tf-button" data-tf="15">15m</button>
+                <button class="tf-button" data-tf="30">30m</button>
+                <button class="tf-button" data-tf="60">1h</button>
+                <div class="info-note">
+                    * "C (current)" shows the live rolling ~24h buffer. Any other timeframe loads the
+                    <strong>full retained history</strong> (up to 14 days) bucketed to that resolution.
+                </div>
+            </div>
+            
+            <div id="depth-selector">
+                <strong>Depths for monitoring:</strong><br>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="1"> D1</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="2" checked> D2</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="3"> D3</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="5" checked> D5</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="8"> D8</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="10" checked> D10</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="20"> D20</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="40"> D40</label>
+                <label class="depth-checkbox"><input type="checkbox" class="depth-option" value="60"> D60</label>
+                <button id="update-chart-btn">Update</button>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <label style="color: #888;">
+                    <input type="checkbox" id="sound-enabled" checked> 
+                    Sound notifications on bid/ask crossover
+                </label>
+            </div>
+        </div>
+
+        <div id="status" class="disconnected">
+            Status: <span id="status-text">Disconnected</span>
+        </div>
+
+        <!-- Age of the last successful response per data source. Distinguishes
+             "the market is quiet" from "the fetch failed and you are looking
+             at frozen numbers". -->
+        <div id="data-quality"></div>
+
+        <div id="display-depth-selector">
+            <h3>📈 Displayed depths on chart:</h3>
+            <div id="display-depth-options">
+                <div class="depth-display-option" data-depth="1">D1 (1%)</div>
+                <div class="depth-display-option recommended selected" data-depth="2">D2 (2%)</div>
+                <div class="depth-display-option" data-depth="3">D3 (3%)</div>
+                <div class="depth-display-option recommended selected" data-depth="5">D5 (5%)</div>
+                <div class="depth-display-option" data-depth="8">D8 (8%)</div>
+                <div class="depth-display-option recommended selected" data-depth="10">D10 (10%)</div>
+                <div class="depth-display-option whale" data-depth="20">D20 (20%)</div>
+                <div class="depth-display-option whale" data-depth="40">D40 (40%)</div>
+                <div class="depth-display-option whale" data-depth="60">D60 (60%)</div>
+            </div>
+            <div class="recommendation-note">
+                ⭐ <strong>Standard levels (D1-D5):</strong> Optimal for scalping and day trading. D2 is industry standard.
+            </div>
+            <div class="whale-note">
+                🐋 <strong>Whale levels (D20-D60):</strong> Show large institutional orders and market manipulation.
+            </div>
+            
+            <div id="price-stats">
+                <div class="price-stat-item">
+                    <div class="price-stat-label">Current Price</div>
+                    <div class="price-stat-value" id="current-price">-</div>
+                </div>
+                <div class="price-stat-item">
+                    <div class="price-stat-label">Max Price</div>
+                    <div class="price-stat-value" id="max-price" style="color: #26a69a;">-</div>
+                </div>
+                <div class="price-stat-item">
+                    <div class="price-stat-label">Min Price</div>
+                    <div class="price-stat-value" id="min-price" style="color: #ef5350;">-</div>
+                </div>
+                <div class="price-stat-item">
+                    <div class="price-stat-label">Timeframe</div>
+                    <div class="price-stat-value" id="current-tf">C (current)</div>
+                </div>
+                <div class="price-stat-item">
+                    <div class="price-stat-label">Updates</div>
+                    <div class="price-stat-value" id="updates">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="info">
+            <div class="info-block">
+                <div class="info-label">D3 Bids</div>
+                <div class="info-value" id="d3-bids" style="color: #26a69a;">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">D3 Asks</div>
+                <div class="info-value" id="d3-asks" style="color: #ef5350;">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">D5 Bids</div>
+                <div class="info-value" id="d5-bids" style="color: #26a69a;">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">D5 Asks</div>
+                <div class="info-value" id="d5-asks" style="color: #ef5350;">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Crossovers</div>
+                <div class="info-value" id="crossovers">0</div>
+            </div>
+        </div>
+
+        <div id="footprint-controls">
+            <strong>Volume overlay:</strong>
+            <button class="fp-mode-btn active" data-mode="depth" title="Order-book bid/ask volume at the selected depth bands">Order-book depth</button>
+            <button class="fp-mode-btn" data-mode="traded" title="Actual executed buy/sell volume">Traded volume</button>
+            <button class="fp-mode-btn fp-off" data-mode="off" title="Hide the overlay">Off</button>
+            <span class="info-note" style="margin-left:10px">
+                Bars grow up from the baseline while price rises, down from the top while price falls — hover a bar for the numbers behind it.
+            </span>
+        </div>
+
+        <div id="chart-container">
+            <div id="footprint-tooltip" class="fp-tooltip hidden"></div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <h2 style="text-align: center; color: #9c27b0;">📈 Buy/Sell Volume Delta Analysis</h2>
+        
+        <div id="volume-controls">
+            <strong>Period:</strong>
+            <select id="volume-period">
+                <option value="5m" selected>5m</option>
+                <option value="15m">15m</option>
+                <option value="30m">30m</option>
+                <option value="1h">1h</option>
+                <option value="2h">2h</option>
+                <option value="4h">4h</option>
+            </select>
+            <strong style="margin-left: 10px;">MA:</strong>
+            <input type="number" id="ma-period" value="14" min="5" max="50" step="1" style="width: 60px;">
+            <strong style="margin-left: 10px;" title="Window for the rolling net-delta oscillator. The cumulative CVD line ignores this.">Rolling Δ:</strong>
+            <input type="number" id="cvd-period" value="12" min="5" max="50" step="1" style="width: 60px;">
+            <button id="fetch-volume-data-btn">Update</button>
+            
+            <div class="info-note" style="margin-top: 10px;">
+                * Auto-update every minute
+            </div>
+        </div>
+
+        <div id="volume-info">
+            <div class="info-block">
+                <div class="info-label">Total Volume</div>
+                <div class="info-value" id="total-volume-value">-</div>
+                <div class="info-note">buyVol + sellVol</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Imbalance</div>
+                <div class="info-value" id="imbalance-value">-</div>
+                <div class="info-note">−1 … +1, normalised</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Delta Ratio</div>
+                <div class="info-value" id="volume-delta-value">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">CVD cumulative</div>
+                <div class="info-value" id="cvd-cumulative-value">-</div>
+                <div class="info-note">carries divergences</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Rolling Δ (N)</div>
+                <div class="info-value" id="cvd-value">-</div>
+                <div class="info-note">windowed oscillator</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Buy Pressure</div>
+                <div class="info-value" id="buy-pressure-value">-</div>
+            </div>
+            <div class="info-block">
+                <div class="info-label">Sentiment</div>
+                <div class="info-value" id="market-sentiment-value">-</div>
+            </div>
+        </div>
+
+        <div id="volume-chart-container"></div>
+
+        <!-- TOP TRADERS TABLE -->
+        <div id="trader-table-container">
+            <h3>📊 Top Traders Long/Short Ratios</h3>
+            <table id="trader-table">
+                <thead>
+                    <tr>
+                        <th>Indicator</th>
+                        <th>Current Value</th>
+                        <th>Change</th>
+                        <th>Trend</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>T-Position</strong><br><small>Top Trader Position Ratio</small></td>
+                        <td id="tposition-value">-</td>
+                        <td id="tposition-change">-</td>
+                        <td id="tposition-trend">-</td>
+                        <td id="tposition-status">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>T-Account</strong><br><small>Top Trader Account Ratio</small></td>
+                        <td id="taccount-value">-</td>
+                        <td id="taccount-change">-</td>
+                        <td id="taccount-trend">-</td>
+                        <td id="taccount-status">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>G-Account</strong><br><small>Global Account Ratio</small></td>
+                        <td id="gaccount-value">-</td>
+                        <td id="gaccount-change">-</td>
+                        <td id="gaccount-trend">-</td>
+                        <td id="gaccount-status">-</td>
+                    </tr>
+                    <tr style="background: #151515;">
+                        <td><strong>Overall Sentiment</strong></td>
+                        <td id="sentiment-value" colspan="4" style="font-size: 18px; font-weight: bold;">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="recommendation-note">
+            💡 <strong>Bars (right scale):</strong> total traded volume (buyVol + sellVol), tinted green/red by which side was aggressing.<br>
+            💡 <strong>MA Total Volume (yellow):</strong> moving average of total volume — this is what makes "was there volume?" a checkable question.<br>
+            💡 <strong>CVD cumulative (white):</strong> running delta sum with no reset. This is the line that shows price/CVD divergence.<br>
+            💡 <strong>Rolling Δ (cyan):</strong> net delta over the last N bars — an oscillator. It cannot show divergence; the window discards the memory divergence needs.<br>
+            💡 <strong>Buy/Sell Ratio (purple, left scale):</strong> taker buy/sell ratio. &gt;1 = aggressive buying.<br>
+            💡 <strong>Top Traders:</strong> T-Position/Account/G-Account show sentiment of top traders and overall market. &gt;1 = bullish.
+        </div>
+    </div>
+  </div>

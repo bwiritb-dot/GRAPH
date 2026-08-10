@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoDATEX · Order Book · Depth History &amp; Volume Profile</title>
+    <meta name="description" content="CryptoDATEX — Order book depth history, directional volume profile and liquidations, tracked continuously since server start">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/depth-section.css">
+</head>
+<body class="ob-page">
+<div id="app">
+
+  <!-- ══ HEADER — same shell as Futures/Options, third tab active ═══ -->
+  <header id="header">
+    <div class="header-logo">
+      <img src="/assets/logo.png" alt="CryptoDATEX" class="cdx-logo"
+           onerror="this.style.display='none';document.getElementById('cdx-text').style.display='flex'">
+      <div id="cdx-text" class="cdx-text-logo" style="display:none">
+        <div class="cdx-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M2 16 L7 10 L11 13 L16 6 L20 9" stroke="url(#g1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="16" cy="6" r="2.5" fill="url(#g1)"/>
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#f7931a"/>
+            </linearGradient></defs>
+          </svg>
+        </div>
+        <div><div class="cdx-brand-top">CRYPTO</div><div class="cdx-brand-bot">DATEX</div></div>
+      </div>
+    </div>
+    <div class="header-divider"></div>
+    <nav class="page-switcher" aria-label="Dashboard pages">
+      <a class="page-link" data-path="/" href="/">Futures</a>
+      <a class="page-link" data-path="/options" href="/options">Options</a>
+      <a class="page-link active" data-path="/orderbook" href="/orderbook">Order Book</a>
+    </nav>
+    <div class="header-divider"></div>
+
+    <div class="price-display">
+      <div class="price-value" id="hdr-price">—</div>
+      <div class="price-change" id="hdr-change"></div>
+      <div class="price-sym" id="hdr-sym">BTCUSDT · PERP</div>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="world-clocks">
+      <div class="wc-item"><span class="wc-city">LOCAL</span><span class="wc-time" id="wc-local">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇬🇧</span><span class="wc-city">LON</span><span class="wc-time" id="wc-lon">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇨🇳</span><span class="wc-city">BEJ</span><span class="wc-time" id="wc-bej">--:--:--</span></div>
+      <div class="wc-divider">|</div>
+      <div class="wc-item"><span class="wc-flag">🇺🇸</span><span class="wc-city">NYC</span><span class="wc-time" id="wc-nyc">--:--:--</span></div>
+    </div>
+    <div class="header-divider"></div>
+    <div class="live-badge" id="ob-live-badge"><div class="live-dot"></div>LIVE</div>
+    <button class="btn-refresh" id="btn-ob-refresh" title="Refresh all data on this page">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 4v6h-6M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+  </header>
+
+  <!--#include depth-section-->
+
+  <!-- ══ LIQUIDATIONS ROW — Binance live feed + CoinGlass heatmap ═══ -->
+  <div id="liq-row">
+
+    <div id="liq-panel" class="liq-panel">
+      <div class="section-hdr">
+        <span class="section-title">💥 LIQUIDATIONS · LIVE FEED</span>
+        <span class="liq-source">Binance Futures WS</span>
+      </div>
+      <div class="liq-stats-row">
+        <div class="liq-stat">
+          <div class="liq-stat-label">LONGS LIQUIDATED</div>
+          <div class="liq-stat-val" id="liq-long-usd">—</div>
+          <div class="liq-stat-cnt" id="liq-long-cnt">—</div>
+        </div>
+        <div class="liq-stat">
+          <div class="liq-stat-label">SHORTS LIQUIDATED</div>
+          <div class="liq-stat-val" id="liq-short-usd">—</div>
+          <div class="liq-stat-cnt" id="liq-short-cnt">—</div>
+        </div>
+      </div>
+      <div class="liq-ratio-wrap">
+        <div class="liq-ratio-label">
+          <span class="liq-ratio-l">LONG</span>
+          <span class="liq-ratio-val" id="liq-lsr">—</span>
+          <span class="liq-ratio-r">SHORT</span>
+        </div>
+        <div class="liq-ratio-bar">
+          <div class="liq-ratio-fill-l" id="liq-fill-l" style="width:50%"></div>
+          <div class="liq-ratio-fill-s" id="liq-fill-s" style="width:50%"></div>
+        </div>
+      </div>
+      <div class="liq-chart-hdr">LAST 12H</div>
+      <div class="liq-bar-chart" id="liq-bar-chart"></div>
+      <div class="liq-top-hdr">
+        <span>TOP-10 LARGEST</span>
+        <span class="liq-ts" id="liq-ts">—</span>
+      </div>
+      <div class="liq-top-list" id="liq-top-list">
+        <div class="liq-loading">Loading…</div>
+      </div>
+      <div class="liq-feed-hdr">
+        <span>LIVE FEED</span>
+        <span class="liq-ws-badge liq-ws-warn" id="liq-ws-badge">WS: connecting…</span>
+      </div>
+      <div class="liq-feed" id="liq-feed"></div>
+    </div>
+
+    <div id="cg-heatmap-panel" class="liq-panel cg-panel">
+      <div class="section-hdr">
+        <span class="section-title">🔥 LIQUIDATION HEATMAP</span>
+        <span class="liq-source" id="cg-status">CoinGlass</span>
+      </div>
+      <div id="cg-heatmap-note" class="cg-note"></div>
+      <div id="cg-heatmap-wrap">
+        <canvas id="cg-heatmap-canvas"></canvas>
+      </div>
+    </div>
+
+  </div><!-- #liq-row -->
+
+  <div id="ob-footer">
+    Order book tracked continuously by the backend since server start (see status above) ·
+    Also visible on the <a href="/">Futures</a> page's data feed ·
+    Powered by <a href="https://www.tradingview.com" target="_blank" rel="noopener">TradingView Lightweight Charts</a>
+  </div>
+
+</div><!-- #app -->
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/js/liquidations.js"></script>
+<script src="/lightweight/app.js"></script>
+</body>
+</html>

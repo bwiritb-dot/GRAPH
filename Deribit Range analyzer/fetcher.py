@@ -1,0 +1,1934 @@
+import argparse
+import json
+import math
+from collections import defaultdict
+from datetime import datetime, timezone
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import requests
+
+BASE_URL = "https://www.deribit.com/api/v2"
+APP_DIR = Path(__file__).resolve().parent
+DEFAULT_OUTPUT_PATH = APP_DIR / "ranges.json"
+
+DASHBOARD_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deribit Sigma Map</title>
+  <style>
+    :root {
+      --bg: #07111b;
+      --bg-elevated: rgba(11, 25, 38, 0.9);
+      --bg-strong: rgba(15, 33, 49, 0.98);
+      --line: rgba(146, 187, 219, 0.18);
+      --line-strong: rgba(146, 187, 219, 0.34);
+      --text: #eef6ff;
+      --muted: #8ca4b9;
+      --accent: #78d4ff;
+      --accent-strong: #23a7da;
+      --gold: #f3c06f;
+      --green: #67e5a8;
+      --red: #ff8c8c;
+      --shadow: 0 24px 84px rgba(0, 0, 0, 0.34);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --content-width: 1440px;
+      --plot-height: 520px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI Variable", "Trebuchet MS", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(38, 111, 160, 0.42), transparent 28%),
+        radial-gradient(circle at top right, rgba(243, 192, 111, 0.16), transparent 24%),
+        radial-gradient(circle at bottom center, rgba(17, 73, 106, 0.42), transparent 34%),
+        linear-gradient(135deg, #07111b 0%, #0a1621 48%, #081520 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 78px 78px;
+      opacity: 0.08;
+      mask-image: radial-gradient(circle at top, black 24%, transparent 78%);
+      pointer-events: none;
+    }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--content-width));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+      display: grid;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero,
+    .panel {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)),
+        var(--bg-elevated);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      animation: rise 620ms ease both;
+    }
+
+    .hero {
+      border-radius: 34px;
+      padding: 28px;
+      display: grid;
+      gap: 28px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -14% -38% 42%;
+      height: 260px;
+      background: radial-gradient(circle, rgba(120, 212, 255, 0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .eyebrow,
+    .section-label {
+      display: inline-block;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 0.74rem;
+      color: var(--gold);
+    }
+
+    .hero h1 {
+      margin: 12px 0 16px;
+      font-size: clamp(2.3rem, 4vw, 4.2rem);
+      line-height: 0.98;
+      font-family: Georgia, "Times New Roman", serif;
+      max-width: 12ch;
+    }
+
+    .hero-copy {
+      max-width: 68ch;
+      color: var(--muted);
+      line-height: 1.68;
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .button {
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 20px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button:disabled {
+      cursor: wait;
+      opacity: 0.72;
+      transform: none;
+    }
+
+    .button.primary {
+      color: #06111a;
+      background: linear-gradient(135deg, #93e5ff 0%, #52c1ec 100%);
+      box-shadow: 0 12px 28px rgba(82, 193, 236, 0.28);
+    }
+
+    .button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      font-size: 0.94rem;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      min-height: 48px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 18px rgba(120, 212, 255, 0.42);
+    }
+
+    .status-pill.warn .status-dot {
+      background: var(--gold);
+      box-shadow: 0 0 18px rgba(243, 192, 111, 0.42);
+    }
+
+    .status-pill.error .status-dot {
+      background: var(--red);
+      box-shadow: 0 0 18px rgba(255, 140, 140, 0.42);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.01));
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      min-height: 132px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.84rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: clamp(1.5rem, 2vw, 2.3rem);
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .metric-subtle {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .hero-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-top: 6px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .warning-text {
+      color: var(--gold);
+      max-width: 64ch;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(350px, 0.9fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      border-radius: var(--radius-xl);
+      padding: 24px;
+    }
+
+    .chart-panel {
+      animation-delay: 110ms;
+    }
+
+    .detail-panel {
+      animation-delay: 180ms;
+      position: sticky;
+      top: 20px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      margin: 10px 0 0;
+      font-size: 1.72rem;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .section-note {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .legend-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .legend-swatch,
+    .legend-line {
+      display: inline-block;
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .legend-swatch {
+      width: 26px;
+      height: 12px;
+      border-radius: 999px;
+    }
+
+    .legend-swatch.sigma2 {
+      background: linear-gradient(90deg, rgba(35, 167, 218, 0.62), rgba(120, 212, 255, 0.95));
+      box-shadow: 0 0 22px rgba(120, 212, 255, 0.2);
+    }
+
+    .legend-swatch.sigma1 {
+      background: linear-gradient(90deg, rgba(69, 193, 131, 0.82), rgba(103, 229, 168, 1));
+      box-shadow: 0 0 20px rgba(103, 229, 168, 0.2);
+    }
+
+    .legend-line {
+      width: 2px;
+      height: 16px;
+      background: #fff3cb;
+      box-shadow: 0 0 0 5px rgba(243, 192, 111, 0.14);
+    }
+
+    .chart-shell {
+      display: grid;
+      gap: 16px;
+    }
+
+    .chart-layout {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      --plot-height: 520px;
+    }
+
+    .chart-y-axis {
+      position: relative;
+      height: var(--plot-height);
+      border-right: 1px solid rgba(146, 187, 219, 0.08);
+    }
+
+    .chart-y-label {
+      position: absolute;
+      right: 18px;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.8rem;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .chart-stage {
+      display: grid;
+      gap: 12px;
+    }
+
+    .chart-plot {
+      position: relative;
+      height: var(--plot-height);
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at top right, rgba(243, 192, 111, 0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.012)),
+        rgba(5, 14, 22, 0.52);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    }
+
+    .chart-plot::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.02)),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015), transparent 10%, transparent 90%, rgba(255, 255, 255, 0.015));
+      pointer-events: none;
+    }
+
+    .chart-gridline {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: linear-gradient(180deg, rgba(146, 187, 219, 0.06), rgba(146, 187, 219, 0.14), rgba(146, 187, 219, 0.06));
+    }
+
+    .chart-gridline::after {
+      content: "";
+      position: absolute;
+      left: -1px;
+      top: 0;
+      bottom: 0;
+      border-left: 1px dashed rgba(146, 187, 219, 0.16);
+      opacity: 0.85;
+    }
+
+    .chart-bands {
+      position: absolute;
+      inset: 0;
+    }
+
+    .spot-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(255, 243, 203, 0.05), rgba(255, 243, 203, 0.95), rgba(255, 243, 203, 0.05));
+      box-shadow: 0 0 0 6px rgba(243, 192, 111, 0.08), 0 0 28px rgba(243, 192, 111, 0.18);
+      z-index: 2;
+      transform: translateX(-50%);
+      transition: left 760ms cubic-bezier(0.18, 1, 0.32, 1), opacity 240ms ease;
+    }
+
+    .spot-line::before {
+      content: "";
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 0 8px rgba(243, 192, 111, 0.12);
+    }
+
+    .range-row {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 34px;
+      transform: translateY(-50%) scaleX(0.985);
+      opacity: 0;
+      cursor: pointer;
+      z-index: 3;
+      transition:
+        top 760ms cubic-bezier(0.18, 1, 0.32, 1),
+        opacity 320ms ease,
+        transform 320ms ease;
+    }
+
+    .chart-plot.ready .range-row {
+      opacity: 1;
+      transform: translateY(-50%) scaleX(1);
+    }
+
+    .range-row:hover,
+    .range-row.selected {
+      z-index: 5;
+    }
+
+    .range-row-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+      margin-top: -1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(146, 187, 219, 0.16) 12%, rgba(146, 187, 219, 0.16) 88%, transparent 100%);
+    }
+
+    .range-band {
+      position: absolute;
+      top: 50%;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      transition:
+        left 760ms cubic-bezier(0.18, 1, 0.32, 1),
+        width 760ms cubic-bezier(0.18, 1, 0.32, 1),
+        filter 180ms ease,
+        box-shadow 180ms ease,
+        opacity 180ms ease;
+    }
+
+    .range-band.sigma2 {
+      height: 18px;
+      border: 1px solid rgba(120, 212, 255, 0.18);
+      box-shadow: 0 10px 20px rgba(17, 101, 136, 0.18);
+    }
+
+    .range-band.sigma2.down {
+      background: linear-gradient(90deg, rgba(120, 212, 255, 0.92), rgba(35, 167, 218, 0.52));
+    }
+
+    .range-band.sigma2.up {
+      background: linear-gradient(90deg, rgba(35, 167, 218, 0.52), rgba(120, 212, 255, 0.92));
+    }
+
+    .range-band.sigma1 {
+      height: 10px;
+      box-shadow: 0 0 20px rgba(103, 229, 168, 0.12);
+    }
+
+    .range-band.sigma1.down {
+      background: linear-gradient(90deg, rgba(103, 229, 168, 1), rgba(69, 193, 131, 0.74));
+    }
+
+    .range-band.sigma1.up {
+      background: linear-gradient(90deg, rgba(69, 193, 131, 0.74), rgba(103, 229, 168, 1));
+    }
+
+    .range-row:hover .range-band.sigma2,
+    .range-row.selected .range-band.sigma2 {
+      filter: brightness(1.08);
+      box-shadow: 0 12px 28px rgba(17, 101, 136, 0.26);
+    }
+
+    .range-row:hover .range-band.sigma1,
+    .range-row.selected .range-band.sigma1 {
+      filter: brightness(1.06);
+      box-shadow: 0 0 22px rgba(103, 229, 168, 0.22);
+    }
+
+    .range-value {
+      position: absolute;
+      top: 50%;
+      color: rgba(238, 246, 255, 0.92);
+      font-size: 0.78rem;
+      line-height: 1;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 14px rgba(7, 17, 27, 0.9);
+      pointer-events: none;
+      white-space: nowrap;
+      opacity: 0.92;
+    }
+
+    .range-value.lower {
+      transform: translate(calc(-100% - 10px), -50%);
+      text-align: right;
+    }
+
+    .range-value.upper {
+      transform: translate(10px, -50%);
+      text-align: left;
+    }
+
+    .range-anchor {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: #fff3cb;
+      box-shadow: 0 0 0 7px rgba(243, 192, 111, 0.12);
+      transform: translate(-50%, -50%) scale(0.92);
+      opacity: 0;
+      transition: left 760ms cubic-bezier(0.18, 1, 0.32, 1), opacity 180ms ease, transform 180ms ease;
+    }
+
+    .range-row.selected .range-anchor,
+    .range-row:hover .range-anchor {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      width: min(280px, calc(100% - 24px));
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(120, 212, 255, 0.16);
+      background: rgba(5, 14, 22, 0.94);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+      z-index: 6;
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .chart-tooltip.visible {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    .tooltip-date {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.16rem;
+      margin-bottom: 8px;
+    }
+
+    .tooltip-copy {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }
+
+    .tooltip-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .tooltip-chip {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tooltip-chip span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .tooltip-chip strong {
+      font-size: 0.96rem;
+    }
+
+    .chart-empty {
+      display: grid;
+      place-items: center;
+      height: var(--plot-height);
+      border-radius: 26px;
+      border: 1px dashed rgba(146, 187, 219, 0.2);
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+      line-height: 1.7;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .chart-x-axis {
+      position: relative;
+      height: 32px;
+    }
+
+    .chart-x-label {
+      position: absolute;
+      top: 0;
+      transform: translateX(-50%);
+      color: var(--muted);
+      font-size: 0.86rem;
+      white-space: nowrap;
+    }
+
+    .axis-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .detail-shell {
+      display: grid;
+      gap: 18px;
+    }
+
+    .spotlight {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 22px;
+      background:
+        radial-gradient(circle at top right, rgba(243, 192, 111, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+      display: grid;
+      gap: 14px;
+    }
+
+    .spotlight-date {
+      font-size: clamp(1.9rem, 2.4vw, 2.6rem);
+      line-height: 1;
+      font-family: Georgia, "Times New Roman", serif;
+      margin-top: 10px;
+    }
+
+    .spotlight-days {
+      color: var(--gold);
+      font-weight: 600;
+      font-size: 1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .spotlight-copy {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.96rem;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .mini-card {
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      display: grid;
+      gap: 8px;
+    }
+
+    .mini-card span {
+      color: var(--muted);
+      font-size: 0.84rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .mini-card strong {
+      font-size: 1.16rem;
+    }
+
+    .focus-card,
+    .insight-card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      display: grid;
+      gap: 16px;
+    }
+
+    .focus-rail {
+      position: relative;
+      height: 84px;
+      border-radius: 20px;
+      border: 1px solid rgba(146, 187, 219, 0.14);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      overflow: hidden;
+    }
+
+    .focus-inner {
+      position: absolute;
+      inset: 0 16px;
+    }
+
+    .focus-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 10px;
+      margin-top: -5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .focus-band {
+      position: absolute;
+      top: 50%;
+      border-radius: 999px;
+      transform: translateY(-50%);
+    }
+
+    .focus-band.sigma2 {
+      height: 18px;
+    }
+
+    .focus-band.sigma2.down {
+      background: linear-gradient(90deg, rgba(120, 212, 255, 0.92), rgba(35, 167, 218, 0.52));
+    }
+
+    .focus-band.sigma2.up {
+      background: linear-gradient(90deg, rgba(35, 167, 218, 0.52), rgba(120, 212, 255, 0.92));
+    }
+
+    .focus-band.sigma1 {
+      height: 10px;
+    }
+
+    .focus-band.sigma1.down {
+      background: linear-gradient(90deg, rgba(103, 229, 168, 1), rgba(69, 193, 131, 0.74));
+    }
+
+    .focus-band.sigma1.up {
+      background: linear-gradient(90deg, rgba(69, 193, 131, 0.74), rgba(103, 229, 168, 1));
+    }
+
+    .focus-marker {
+      position: absolute;
+      top: 18px;
+      width: 2px;
+      height: 48px;
+      transform: translateX(-50%);
+      background: #fff3cb;
+      box-shadow: 0 0 0 6px rgba(243, 192, 111, 0.14);
+    }
+
+    .focus-marker::before {
+      content: "";
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--gold);
+    }
+
+    .focus-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .focus-metric {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .focus-metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .focus-metric strong {
+      font-size: 0.98rem;
+    }
+
+    .insight-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.95rem;
+    }
+
+    .empty-state {
+      min-height: 200px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      padding: 24px;
+      line-height: 1.65;
+    }
+
+    .danger {
+      color: #ffb0b0;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 960px) {
+      .metrics,
+      .mini-grid,
+      .focus-metrics {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .chart-layout {
+        grid-template-columns: 118px minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(calc(100% - 20px), var(--content-width));
+        padding-top: 16px;
+      }
+
+      .hero,
+      .panel {
+        padding: 18px;
+        border-radius: 24px;
+      }
+
+      .metrics,
+      .mini-grid,
+      .focus-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-top,
+      .actions {
+        width: 100%;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .button,
+      .status-pill {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .legend-row,
+      .legend {
+        gap: 12px;
+      }
+
+      .chart-layout {
+        grid-template-columns: 98px minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .chart-y-label {
+        right: 10px;
+        font-size: 0.72rem;
+      }
+
+      .range-value {
+        font-size: 0.68rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <span class="eyebrow">ETH option surface</span>
+          <h1>Deribit sigma map</h1>
+          <p class="hero-copy">
+            Read the option surface as a visual field instead of a numeric table. Price sits on the horizontal axis,
+            expiry rises vertically, the wide outer band shows the two-sigma envelope, and the brighter inner band
+            reveals the one-sigma core around the current ETH spot reference.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button class="button primary" id="refreshBtn" type="button">Refresh live data</button>
+          <button class="button secondary" id="saveBtn" type="button">Save ranges.json</button>
+          <div class="status-pill" id="statusPill">
+            <span class="status-dot"></span>
+            <span id="statusText">Waiting for first fetch</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <article class="metric-card">
+          <span class="metric-label">ETH index</span>
+          <strong class="metric-value" id="metricIndex">--</strong>
+          <span class="metric-subtle" id="metricIndexSubtle">Live spot reference</span>
+        </article>
+
+        <article class="metric-card">
+          <span class="metric-label">Active expiries</span>
+          <strong class="metric-value" id="metricExpiries">--</strong>
+          <span class="metric-subtle" id="metricExpiriesSubtle">Rows rendered on the sigma map</span>
+        </article>
+
+        <article class="metric-card">
+          <span class="metric-label">Nearest expiry</span>
+          <strong class="metric-value" id="metricNearest">--</strong>
+          <span class="metric-subtle" id="metricNearestSubtle">Anchored at the lower edge</span>
+        </article>
+
+        <article class="metric-card">
+          <span class="metric-label">Average ATM IV</span>
+          <strong class="metric-value" id="metricIv">--</strong>
+          <span class="metric-subtle" id="metricIvSubtle">Surface average across maturities</span>
+        </article>
+      </div>
+
+      <div class="hero-footer">
+        <span id="generatedAt">No dataset loaded yet.</span>
+        <span class="warning-text" id="warningText"></span>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel chart-panel">
+        <div class="section-head">
+          <div>
+            <span class="section-label">Visual surface</span>
+            <h2>Price by expiry</h2>
+          </div>
+          <span class="section-note" id="chartCount">Loading sigma map...</span>
+        </div>
+
+        <div class="legend-row">
+          <div class="legend">
+            <span class="legend-item"><i class="legend-swatch sigma2"></i>2 sigma envelope</span>
+            <span class="legend-item"><i class="legend-swatch sigma1"></i>1 sigma core</span>
+            <span class="legend-item"><i class="legend-line"></i>ETH spot line</span>
+          </div>
+          <span class="section-note">Hover for values, click a band to lock the expiry details.</span>
+        </div>
+
+        <div class="chart-shell">
+          <div class="chart-layout" id="chartLayout">
+            <div class="chart-y-axis" id="chartYAxis"></div>
+
+            <div class="chart-stage">
+              <div class="chart-plot" id="chartPlot">
+                <div id="chartGrid"></div>
+                <div class="spot-line" id="spotLine"></div>
+                <div class="chart-bands" id="chartRows"></div>
+                <div class="chart-tooltip" id="chartTooltip"></div>
+                <div class="chart-empty" id="chartEmpty">
+                  Loading the ETH sigma surface...
+                </div>
+              </div>
+
+              <div class="chart-x-axis" id="chartXAxis"></div>
+              <div class="axis-caption">
+                <span>Far expiries at the top, nearest expiry at the bottom</span>
+                <span>ETH price</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel detail-panel">
+        <div class="section-head">
+          <div>
+            <span class="section-label">Selected expiry</span>
+            <h2>Spotlight</h2>
+          </div>
+          <span class="section-note">Numbers stay here and in the hover card, not inside the graph.</span>
+        </div>
+
+        <div id="detailPane" class="empty-state">
+          The first successful fetch will populate this panel with the selected expiry, its sigma ranges,
+          and a focused visual preview around the spot line.
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      payload: null,
+      data: null,
+      selectedExpiry: null,
+      busy: false,
+      hoverExpiry: null,
+      chartDomain: null
+    };
+
+    const currencyFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    const axisNumberFormatter = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+
+    const dayFormatter = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1
+    });
+
+    const percentFormatter = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 2
+    });
+
+    const elements = {
+      refreshBtn: document.getElementById("refreshBtn"),
+      saveBtn: document.getElementById("saveBtn"),
+      statusPill: document.getElementById("statusPill"),
+      statusText: document.getElementById("statusText"),
+      warningText: document.getElementById("warningText"),
+      generatedAt: document.getElementById("generatedAt"),
+      metricIndex: document.getElementById("metricIndex"),
+      metricIndexSubtle: document.getElementById("metricIndexSubtle"),
+      metricExpiries: document.getElementById("metricExpiries"),
+      metricExpiriesSubtle: document.getElementById("metricExpiriesSubtle"),
+      metricNearest: document.getElementById("metricNearest"),
+      metricNearestSubtle: document.getElementById("metricNearestSubtle"),
+      metricIv: document.getElementById("metricIv"),
+      metricIvSubtle: document.getElementById("metricIvSubtle"),
+      chartCount: document.getElementById("chartCount"),
+      chartLayout: document.getElementById("chartLayout"),
+      chartPlot: document.getElementById("chartPlot"),
+      chartGrid: document.getElementById("chartGrid"),
+      chartRows: document.getElementById("chartRows"),
+      chartYAxis: document.getElementById("chartYAxis"),
+      chartXAxis: document.getElementById("chartXAxis"),
+      chartEmpty: document.getElementById("chartEmpty"),
+      chartTooltip: document.getElementById("chartTooltip"),
+      spotLine: document.getElementById("spotLine"),
+      detailPane: document.getElementById("detailPane")
+    };
+
+    function formatCurrency(value) {
+      return currencyFormatter.format(value ?? 0);
+    }
+
+    function formatAxisPrice(value) {
+      return `$${axisNumberFormatter.format(value ?? 0)}`;
+    }
+
+    function formatRangeMove(value) {
+      return axisNumberFormatter.format(Math.round(value ?? 0));
+    }
+
+    function formatPercent(value) {
+      return `${percentFormatter.format(value ?? 0)}%`;
+    }
+
+    function formatDays(value) {
+      return `${dayFormatter.format(value ?? 0)}d`;
+    }
+
+    function formatDateLabel(value) {
+      return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+    }
+
+    function formatDateKeyLabel(value) {
+      return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "2-digit"
+      });
+    }
+
+    function setBusy(isBusy) {
+      state.busy = isBusy;
+      elements.refreshBtn.disabled = isBusy;
+      elements.saveBtn.disabled = isBusy;
+    }
+
+    function setStatus(message, tone = "info") {
+      elements.statusText.textContent = message;
+      elements.statusPill.className = "status-pill";
+      if (tone === "warn") {
+        elements.statusPill.classList.add("warn");
+      } else if (tone === "error") {
+        elements.statusPill.classList.add("error");
+      }
+    }
+
+    function getSelectedExpiry() {
+      if (!state.data || !state.data.expirations.length) {
+        return null;
+      }
+      return state.data.expirations.find((item) => item.expiry === state.selectedExpiry) || state.data.expirations[0];
+    }
+
+    function getChartExpiries() {
+      if (!state.data || !state.data.expirations.length) {
+        return [];
+      }
+      return [...state.data.expirations].reverse();
+    }
+
+    function getChartDomain(expiries, spotPrice) {
+      if (!expiries.length) {
+        return { min: 0, max: 1 };
+      }
+      const minValue = Math.min(...expiries.map((item) => item.sigma2.low), spotPrice);
+      const maxValue = Math.max(...expiries.map((item) => item.sigma2.high), spotPrice);
+      const span = Math.max(maxValue - minValue, 1);
+      const padding = span * 0.08;
+      return {
+        min: minValue - padding,
+        max: maxValue + padding
+      };
+    }
+
+    function priceToPercent(value, domain) {
+      const span = Math.max(domain.max - domain.min, 1);
+      const raw = ((value - domain.min) / span) * 100;
+      return Math.min(100, Math.max(0, raw));
+    }
+
+    function getSegmentPosition(anchorValue, edgeValue, domain) {
+      const anchorPosition = priceToPercent(anchorValue, domain);
+      const edgePosition = priceToPercent(edgeValue, domain);
+      return {
+        left: Math.min(anchorPosition, edgePosition),
+        width: Math.max(0.6, Math.abs(edgePosition - anchorPosition))
+      };
+    }
+
+    function renderRangeBands(rangeName, segments) {
+      return `
+        <div class="range-band ${rangeName} down" style="left: ${segments.down.left}%; width: ${segments.down.width}%"></div>
+        <div class="range-band ${rangeName} up" style="left: ${segments.up.left}%; width: ${segments.up.width}%"></div>
+      `;
+    }
+
+    function renderFocusBands(rangeName, segments) {
+      return `
+        <div class="focus-band ${rangeName} down" style="left: ${segments.down.left}%; width: ${segments.down.width}%"></div>
+        <div class="focus-band ${rangeName} up" style="left: ${segments.up.left}%; width: ${segments.up.width}%"></div>
+      `;
+    }
+
+    function renderMetrics() {
+      const data = state.data;
+      if (!data || !data.expirations.length) {
+        elements.metricIndex.textContent = "--";
+        elements.metricExpiries.textContent = "--";
+        elements.metricNearest.textContent = "--";
+        elements.metricIv.textContent = "--";
+        elements.metricIndexSubtle.textContent = "Live spot reference";
+        elements.metricExpiriesSubtle.textContent = "Rows rendered on the sigma map";
+        elements.metricNearestSubtle.textContent = "Anchored at the lower edge";
+        elements.metricIvSubtle.textContent = "Surface average across maturities";
+        return;
+      }
+
+      const nearest = state.data.expirations[0];
+      const avgIv = state.data.expirations.reduce((sum, item) => sum + item.atm_iv_pct, 0) / state.data.expirations.length;
+
+      elements.metricIndex.textContent = formatCurrency(data.eth_index_price);
+      elements.metricExpiries.textContent = String(state.data.expirations.length);
+      elements.metricNearest.textContent = formatDateLabel(nearest.expiry);
+      elements.metricIv.textContent = formatPercent(avgIv);
+
+      elements.metricIndexSubtle.textContent = `Spot line centered on ${formatCurrency(data.eth_index_price)}`;
+      elements.metricExpiriesSubtle.textContent = `${state.data.expirations.length} visible sigma rows`;
+      elements.metricNearestSubtle.textContent = `${formatDays(nearest.days_to_expiry)} to settlement`;
+      elements.metricIvSubtle.textContent = `${formatPercent(nearest.atm_iv_pct)} on the front expiry`;
+    }
+
+    function renderSummary() {
+      if (!state.payload || !state.data) {
+        elements.generatedAt.textContent = "No dataset loaded yet.";
+        elements.warningText.textContent = "";
+        return;
+      }
+
+      const generatedAt = new Date(state.data.generated_at);
+      elements.generatedAt.textContent = `Generated ${generatedAt.toLocaleString()}`;
+      elements.warningText.textContent = state.payload.warning || "";
+    }
+
+    function renderChart() {
+      const data = state.data;
+      const chartExpiries = getChartExpiries();
+
+      if (!data || !chartExpiries.length) {
+        elements.chartCount.textContent = "No valid expiries available";
+        elements.chartGrid.innerHTML = "";
+        elements.chartRows.innerHTML = "";
+        elements.chartYAxis.innerHTML = "";
+        elements.chartXAxis.innerHTML = "";
+        elements.chartEmpty.className = "chart-empty";
+        elements.chartEmpty.style.display = "grid";
+        elements.spotLine.style.opacity = "0";
+        hideTooltip();
+        return;
+      }
+
+      const plotHeight = Math.max(420, chartExpiries.length * 58);
+      elements.chartLayout.style.setProperty("--plot-height", `${plotHeight}px`);
+      elements.chartCount.textContent = `${chartExpiries.length} expiries rendered with nearest maturity at the bottom`;
+      elements.chartEmpty.className = "chart-empty";
+      elements.chartEmpty.style.display = "none";
+
+      const domain = getChartDomain(chartExpiries, data.eth_index_price);
+      state.chartDomain = domain;
+
+      const tickCount = 6;
+      const xTicks = Array.from({ length: tickCount }, (_, index) => {
+        const value = domain.min + ((domain.max - domain.min) * index) / (tickCount - 1);
+        return {
+          value,
+          position: (index / (tickCount - 1)) * 100
+        };
+      });
+
+      elements.chartGrid.innerHTML = xTicks.map((tick) => `
+        <div class="chart-gridline" style="left: ${tick.position}%"></div>
+      `).join("");
+
+      elements.chartXAxis.innerHTML = xTicks.map((tick) => `
+        <div class="chart-x-label" style="left: ${tick.position}%">${formatAxisPrice(tick.value)}</div>
+      `).join("");
+
+      elements.chartYAxis.innerHTML = chartExpiries.map((item, index) => {
+        const position = chartExpiries.length === 1 ? 50 : (index / (chartExpiries.length - 1)) * 100;
+        return `
+          <div class="chart-y-label" style="top: ${position}%">${formatDateKeyLabel(item.expiry)}</div>
+        `;
+      }).join("");
+
+      const spotPosition = priceToPercent(data.eth_index_price, domain);
+      elements.spotLine.style.left = `${spotPosition}%`;
+      elements.spotLine.style.opacity = "1";
+
+      elements.chartRows.innerHTML = chartExpiries.map((item, index) => {
+        const top = chartExpiries.length === 1 ? 50 : (index / (chartExpiries.length - 1)) * 100;
+        const sigma2LowPosition = priceToPercent(item.sigma2.low, domain);
+        const sigma2HighPosition = priceToPercent(item.sigma2.high, domain);
+        const sigma2Segments = {
+          down: getSegmentPosition(data.eth_index_price, item.sigma2.low, domain),
+          up: getSegmentPosition(data.eth_index_price, item.sigma2.high, domain)
+        };
+        const sigma1Segments = {
+          down: getSegmentPosition(data.eth_index_price, item.sigma1.low, domain),
+          up: getSegmentPosition(data.eth_index_price, item.sigma1.high, domain)
+        };
+        const sigma2DownMove = Math.max(0, data.eth_index_price - item.sigma2.low);
+        const sigma2UpMove = Math.max(0, item.sigma2.high - data.eth_index_price);
+        const isSelected = item.expiry === state.selectedExpiry;
+
+        return `
+          <div
+            class="range-row ${isSelected ? "selected" : ""}"
+            data-expiry="${item.expiry}"
+            style="top: ${top}%"
+            aria-label="${formatDateLabel(item.expiry)} sigma range"
+          >
+            <div class="range-row-line"></div>
+            ${renderRangeBands("sigma2", sigma2Segments)}
+            ${renderRangeBands("sigma1", sigma1Segments)}
+            <div class="range-value lower" style="left: ${sigma2LowPosition}%">${formatRangeMove(sigma2DownMove)}</div>
+            <div class="range-value upper" style="left: ${sigma2HighPosition}%">${formatRangeMove(sigma2UpMove)}</div>
+            <div class="range-anchor" style="left: ${spotPosition}%"></div>
+          </div>
+        `;
+      }).join("");
+
+      elements.chartPlot.classList.remove("ready");
+      requestAnimationFrame(() => {
+        elements.chartPlot.classList.add("ready");
+      });
+    }
+
+    function renderDetail() {
+      const selected = getSelectedExpiry();
+      if (!selected || !state.chartDomain) {
+        elements.detailPane.className = "empty-state";
+        elements.detailPane.innerHTML = "No expiry is available to inspect right now.";
+        return;
+      }
+
+      const domain = state.chartDomain;
+      const spotPrice = state.data.eth_index_price;
+      const sigma2Segments = {
+        down: getSegmentPosition(spotPrice, selected.sigma2.low, domain),
+        up: getSegmentPosition(spotPrice, selected.sigma2.high, domain)
+      };
+      const sigma1Segments = {
+        down: getSegmentPosition(spotPrice, selected.sigma1.low, domain),
+        up: getSegmentPosition(spotPrice, selected.sigma1.high, domain)
+      };
+      const spotPosition = priceToPercent(spotPrice, domain);
+      const sigma1DownMove = Math.max(0, spotPrice - selected.sigma1.low);
+      const sigma1UpMove = Math.max(0, selected.sigma1.high - spotPrice);
+      const sigma2DownMove = Math.max(0, spotPrice - selected.sigma2.low);
+      const sigma2UpMove = Math.max(0, selected.sigma2.high - spotPrice);
+
+      elements.detailPane.className = "detail-shell";
+      elements.detailPane.innerHTML = `
+        <section class="spotlight">
+          <div>
+            <span class="section-label">Current focus</span>
+            <div class="spotlight-date">${formatDateLabel(selected.expiry)}</div>
+          </div>
+          <div class="spotlight-days">${formatDays(selected.days_to_expiry)} to expiry</div>
+          <p class="spotlight-copy">
+            The chart shows this maturity as a horizontal sigma lane. The outer band captures the broader two-sigma
+            expectation, while the brighter inner band shows the tighter one-sigma core around the live spot reference.
+          </p>
+        </section>
+
+        <section class="mini-grid">
+          <article class="mini-card">
+            <span>Spot reference</span>
+            <strong>${formatCurrency(state.data.eth_index_price)}</strong>
+          </article>
+          <article class="mini-card">
+            <span>ATM implied vol</span>
+            <strong>${formatPercent(selected.atm_iv_pct)}</strong>
+          </article>
+          <article class="mini-card">
+            <span>ATM strike</span>
+            <strong>${formatCurrency(selected.atm_strike)}</strong>
+          </article>
+          <article class="mini-card">
+            <span>Futures price</span>
+            <strong>${formatCurrency(selected.futures_price)}</strong>
+          </article>
+        </section>
+
+        <section class="focus-card">
+          <div>
+            <span class="section-label">Range preview</span>
+            <div class="section-note">A focused view of the selected row around the current spot line.</div>
+          </div>
+
+          <div class="focus-rail">
+            <div class="focus-inner">
+              <div class="focus-track"></div>
+              ${renderFocusBands("sigma2", sigma2Segments)}
+              ${renderFocusBands("sigma1", sigma1Segments)}
+              <div class="focus-marker" style="left: ${spotPosition}%;"></div>
+            </div>
+          </div>
+
+          <div class="focus-metrics">
+            <div class="focus-metric">
+              <span>1 sigma down</span>
+              <strong>${formatCurrency(sigma1DownMove)}</strong>
+            </div>
+            <div class="focus-metric">
+              <span>1 sigma up</span>
+              <strong>${formatCurrency(sigma1UpMove)}</strong>
+            </div>
+            <div class="focus-metric">
+              <span>2 sigma down</span>
+              <strong>${formatCurrency(sigma2DownMove)}</strong>
+            </div>
+            <div class="focus-metric">
+              <span>2 sigma up</span>
+              <strong>${formatCurrency(sigma2UpMove)}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="insight-card">
+          <span class="section-label">Reading guide</span>
+          <p>
+            Wider lanes imply a larger expected move into that maturity. Because the nearest expiry sits at the bottom,
+            you can read the surface upward from front-end risk into longer-dated uncertainty.
+          </p>
+        </section>
+      `;
+    }
+
+    function renderAll() {
+      renderMetrics();
+      renderSummary();
+      renderChart();
+      renderDetail();
+    }
+
+    function applyPayload(payload) {
+      state.payload = payload;
+      state.data = payload.data;
+      const expiries = payload.data?.expirations || [];
+      if (!expiries.length) {
+        state.selectedExpiry = null;
+      } else if (!state.selectedExpiry || !expiries.some((item) => item.expiry === state.selectedExpiry)) {
+        state.selectedExpiry = expiries[0].expiry;
+      }
+      renderAll();
+    }
+
+    function getExpiryByValue(expiryValue) {
+      return state.data?.expirations?.find((item) => item.expiry === expiryValue) || null;
+    }
+
+    function showTooltip(item, event) {
+      if (!item) {
+        hideTooltip();
+        return;
+      }
+
+      elements.chartTooltip.innerHTML = `
+        <div class="tooltip-date">${formatDateLabel(item.expiry)}</div>
+        <div class="tooltip-copy">Hover details stay here so the chart itself can remain purely visual.</div>
+        <div class="tooltip-grid">
+          <div class="tooltip-chip">
+            <span>1 sigma</span>
+            <strong>${formatCurrency(item.sigma1.low)} to ${formatCurrency(item.sigma1.high)}</strong>
+          </div>
+          <div class="tooltip-chip">
+            <span>2 sigma</span>
+            <strong>${formatCurrency(item.sigma2.low)} to ${formatCurrency(item.sigma2.high)}</strong>
+          </div>
+          <div class="tooltip-chip">
+            <span>Days</span>
+            <strong>${formatDays(item.days_to_expiry)}</strong>
+          </div>
+          <div class="tooltip-chip">
+            <span>ATM IV</span>
+            <strong>${formatPercent(item.atm_iv_pct)}</strong>
+          </div>
+        </div>
+      `;
+
+      const plotRect = elements.chartPlot.getBoundingClientRect();
+      const tooltipRect = elements.chartTooltip.getBoundingClientRect();
+      const offsetX = event.clientX - plotRect.left;
+      const offsetY = event.clientY - plotRect.top;
+      const left = Math.min(plotRect.width - tooltipRect.width - 12, Math.max(12, offsetX + 18));
+      const top = Math.min(plotRect.height - tooltipRect.height - 12, Math.max(12, offsetY - tooltipRect.height - 14));
+
+      elements.chartTooltip.style.left = `${left}px`;
+      elements.chartTooltip.style.top = `${top}px`;
+      elements.chartTooltip.classList.add("visible");
+    }
+
+    function hideTooltip() {
+      elements.chartTooltip.classList.remove("visible");
+    }
+
+    async function loadData({ persist = false } = {}) {
+      setBusy(true);
+      setStatus(persist ? "Saving fresh snapshot..." : "Refreshing live market data...");
+
+      try {
+        const response = await fetch(`/api/ranges?persist=${persist ? "1" : "0"}`, {
+          cache: "no-store"
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Unable to load range data.");
+        }
+
+        applyPayload(payload);
+
+        if (payload.warning) {
+          setStatus("Showing saved snapshot.", "warn");
+        } else if (persist) {
+          setStatus("Snapshot saved to ranges.json.");
+        } else {
+          setStatus("Live sigma map ready.");
+        }
+      } catch (error) {
+        setStatus(error.message, "error");
+        elements.chartCount.textContent = "Unable to load the sigma map";
+        elements.chartEmpty.style.display = "grid";
+        elements.chartEmpty.className = "chart-empty danger";
+        elements.chartEmpty.textContent = error.message;
+        elements.detailPane.className = "empty-state danger";
+        elements.detailPane.textContent = error.message;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    elements.chartRows.addEventListener("click", (event) => {
+      const row = event.target.closest(".range-row[data-expiry]");
+      if (!row) {
+        return;
+      }
+      state.selectedExpiry = row.dataset.expiry;
+      renderAll();
+    });
+
+    elements.chartRows.addEventListener("mousemove", (event) => {
+      const row = event.target.closest(".range-row[data-expiry]");
+      if (!row) {
+        hideTooltip();
+        return;
+      }
+      const item = getExpiryByValue(row.dataset.expiry);
+      showTooltip(item, event);
+    });
+
+    elements.chartRows.addEventListener("mouseleave", () => {
+      hideTooltip();
+    });
+
+    elements.refreshBtn.addEventListener("click", () => {
+      loadData({ persist: false });
+    });
+
+    elements.saveBtn.addEventListener("click", () => {
+      loadData({ persist: true });
+    });
+
+    loadData({ persist: false });
+  </script>
+</body>
+</html>
+"""
+
+
+def api_get(endpoint, params=None):
+    url = f"{BASE_URL}/{endpoint}"
+    response = requests.get(url, params=params, timeout=15)
+    response.raise_for_status()
+    data = response.json()
+    if "error" in data:
+        raise RuntimeError(f"Deribit API error: {data['error']}")
+    return data["result"]
+
+
+def get_eth_index_price():
+    result = api_get("public/get_index_price", {"index_name": "eth_usd"})
+    return result["index_price"]
+
+
+def get_book_summaries():
+    return api_get(
+        "public/get_book_summary_by_currency",
+        {
+            "currency": "ETH",
+            "kind": "option",
+        },
+    )
+
+
+def parse_instrument(name):
+    parts = name.split("-")
+    if len(parts) != 4:
+        return None
+
+    _, expiry_str, strike_str, opt_type = parts
+    try:
+        expiry_dt = datetime.strptime(expiry_str, "%d%b%y").replace(
+            hour=8,
+            minute=0,
+            second=0,
+            microsecond=0,
+            tzinfo=timezone.utc,
+        )
+        return expiry_dt, float(strike_str), opt_type
+    except ValueError:
+        return None
+
+
+def calculate_ranges(futures_price, atm_iv_pct, years_to_expiry):
+    volatility = atm_iv_pct / 100.0
+    sqrt_years = math.sqrt(years_to_expiry)
+
+    def band(multiplier):
+        low = futures_price / math.exp(multiplier * volatility * sqrt_years)
+        high = futures_price * math.exp(multiplier * volatility * sqrt_years)
+        return {
+            "low": round(low, 2),
+            "high": round(high, 2),
+            "range": round(high - low, 2),
+        }
+
+    return {
+        "sigma1": band(1),
+        "sigma2": band(2),
+    }
+
+
+def build_output():
+    now = datetime.now(timezone.utc)
+    index_price = get_eth_index_price()
+    summaries = get_book_summaries()
+
+    by_expiry = defaultdict(list)
+    for summary in summaries:
+        parsed = parse_instrument(summary.get("instrument_name", ""))
+        if parsed is None:
+            continue
+
+        expiry_dt, strike, opt_type = parsed
+        if expiry_dt <= now:
+            continue
+
+        mark_iv = summary.get("mark_iv")
+        if not mark_iv or mark_iv <= 0:
+            continue
+
+        underlying_price = summary.get("underlying_price") or index_price
+        by_expiry[expiry_dt].append(
+            {
+                "strike": strike,
+                "opt_type": opt_type,
+                "mark_iv": mark_iv,
+                "underlying_price": underlying_price,
+            }
+        )
+
+    expirations = []
+    for expiry_dt in sorted(by_expiry):
+        options = by_expiry[expiry_dt]
+        years_to_expiry = (expiry_dt - now).total_seconds() / (365.25 * 24 * 3600)
+        if years_to_expiry <= 0:
+            continue
+
+        calls = [option for option in options if option["opt_type"] == "C"]
+        pool = calls if calls else options
+        atm = min(pool, key=lambda option: abs(option["strike"] - index_price))
+        ranges = calculate_ranges(atm["underlying_price"], atm["mark_iv"], years_to_expiry)
+
+        expirations.append(
+            {
+                "expiry": expiry_dt.strftime("%Y-%m-%d"),
+                "expiry_timestamp": int(expiry_dt.timestamp() * 1000),
+                "days_to_expiry": round(years_to_expiry * 365.25, 1),
+                "futures_price": round(atm["underlying_price"], 2),
+                "atm_strike": atm["strike"],
+                "atm_iv_pct": round(atm["mark_iv"], 2),
+                **ranges,
+            }
+        )
+
+    return {
+        "generated_at": now.isoformat(),
+        "eth_index_price": round(index_price, 2),
+        "expirations": expirations,
+    }
+
+
+def save_output(output, output_path=DEFAULT_OUTPUT_PATH):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
+
+
+def load_saved_output(output_path=DEFAULT_OUTPUT_PATH):
+    if not output_path.exists():
+        return None
+    try:
+        return json.loads(output_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def build_dashboard_payload(output_path=DEFAULT_OUTPUT_PATH, persist=False):
+    try:
+        output = build_output()
+        if persist:
+            save_output(output, output_path)
+        return {
+            "ok": True,
+            "persisted": persist,
+            "warning": None,
+            "stale": False,
+            "data": output,
+        }, HTTPStatus.OK
+    except Exception as exc:
+        saved_output = load_saved_output(output_path)
+        if saved_output is not None:
+            return {
+                "ok": True,
+                "persisted": False,
+                "warning": f"Live Deribit fetch failed. Showing the last saved snapshot instead. Details: {exc}",
+                "stale": True,
+                "data": saved_output,
+            }, HTTPStatus.OK
+        return {
+            "ok": False,
+            "error": f"Live Deribit fetch failed and no saved snapshot is available. Details: {exc}",
+        }, HTTPStatus.BAD_GATEWAY
+
+
+def print_cli_summary(output):
+    print(f"ETH index: ${output['eth_index_price']}")
+    print(f"Expirations found: {len(output['expirations'])}")
+    for expiry in output["expirations"]:
+        sigma1 = expiry["sigma1"]
+        sigma2 = expiry["sigma2"]
+        print(
+            f"  {expiry['expiry']} ({expiry['days_to_expiry']}d) | IV {expiry['atm_iv_pct']}% | "
+            f"1s [{sigma1['low']} - {sigma1['high']}] | 2s [{sigma2['low']} - {sigma2['high']}]"
+        )
+
+
+def run_cli(output_path=DEFAULT_OUTPUT_PATH):
+    print("Fetching Deribit ETH options data...")
+    output = build_output()
+    save_output(output, output_path)
+    print_cli_summary(output)
+    print(f"\\nSaved -> {output_path}")
+
+
+def make_handler(output_path):
+    class FetcherDashboardHandler(BaseHTTPRequestHandler):
+        server_version = "DeribitSigmaMap/1.0"
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            if parsed.path == "/":
+                self._send_response(
+                    DASHBOARD_HTML.encode("utf-8"),
+                    HTTPStatus.OK,
+                    "text/html; charset=utf-8",
+                )
+                return
+
+            if parsed.path == "/api/health":
+                self._send_json(
+                    {
+                        "ok": True,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                return
+
+            if parsed.path == "/api/ranges":
+                query = parse_qs(parsed.query)
+                persist = query.get("persist", ["0"])[0] == "1"
+                payload, status = build_dashboard_payload(
+                    output_path=output_path,
+                    persist=persist,
+                )
+                self._send_json(payload, status=status)
+                return
+
+            self._send_json(
+                {"ok": False, "error": f"Unknown route: {parsed.path}"},
+                status=HTTPStatus.NOT_FOUND,
+            )
+
+        def log_message(self, format_string, *args):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"[{timestamp}] {self.address_string()} - {format_string % args}")
+
+        def _send_json(self, payload, status=HTTPStatus.OK):
+            body = json.dumps(payload).encode("utf-8")
+            self._send_response(body, status, "application/json; charset=utf-8")
+
+        def _send_response(self, body, status, content_type):
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+    return FetcherDashboardHandler
+
+
+def run_server(host, port, output_path=DEFAULT_OUTPUT_PATH):
+    handler = make_handler(output_path)
+    with ThreadingHTTPServer((host, port), handler) as server:
+        print(f"Serving Deribit Sigma Map at http://{host}:{port}")
+        print("Press Ctrl+C to stop.")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\\nShutting down dashboard.")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Deribit ETH sigma map with a local dashboard UI."
+    )
+    parser.add_argument(
+        "--cli",
+        action="store_true",
+        help="Run the original one-shot fetcher and save ranges.json instead of starting the UI.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Dashboard host to bind. Default: 127.0.0.1",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Dashboard port to bind. Default: 8000",
+    )
+    parser.add_argument(
+        "--output",
+        default=str(DEFAULT_OUTPUT_PATH),
+        help=f"Snapshot file path. Default: {DEFAULT_OUTPUT_PATH}",
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    output_path = Path(args.output).resolve()
+    if args.cli:
+        run_cli(output_path=output_path)
+    else:
+        run_server(host=args.host, port=args.port, output_path=output_path)

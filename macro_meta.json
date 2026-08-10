@@ -1,0 +1,614 @@
+{
+ "generated_from": "CryptoDatEx_Macro_Indicators_Current_2026-07-29.xlsx",
+ "rows": {
+  "1": {
+   "n": 1,
+   "category": "Инфляция",
+   "name": "CPI, общий (MoM / YoY)",
+   "tv_ticker": "ECONOMIC:USCPI",
+   "fred": "CPIAUCSL",
+   "measures": "Изменение стоимости потребительской корзины. Главный публичный индикатор инфляции.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual против forecast; затем Core CPI MoM и пересмотры.",
+   "crypto_if_up": "Рост выше ожиданий обычно негативен для BTC/ETH; альткоины падают сильнее из-за снижения ликвидности и аппетита к риску.",
+   "crypto_if_down": "Снижение ниже ожиданий обычно позитивно для BTC/ETH и особенно альткоинов, если одновременно падают DXY и US02Y.",
+   "caveats": "Рынок реагирует на сюрприз, а не на абсолютный уровень. Высокий CPI может вызвать рост, если ожидали еще выше.",
+   "watch_with": "US02Y, US10Y, DXY, FedWatch, Nasdaq futures",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://www.bls.gov/cpi/"
+  },
+  "2": {
+   "n": 2,
+   "category": "Инфляция",
+   "name": "Core CPI (без еды и энергии)",
+   "tv_ticker": "ECONOMIC:USCPIFEF",
+   "fred": "CPILFESL",
+   "measures": "Базовая потребительская инфляция, очищенная от волатильных еды и энергии.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Core CPI MoM actual vs forecast — обычно важнее общего YoY.",
+   "crypto_if_up": "Рост — сильный негатив, так как снижает вероятность мягкой политики ФРС.",
+   "crypto_if_down": "Падение — сильный позитив при подтверждении снижением доходностей.",
+   "caveats": "Если общий CPI падает только из-за энергии, а Core остается высоким, первоначальный рост рынка может быстро развернуться.",
+   "watch_with": "US02Y, DXY, shelter inflation, services ex-housing",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://www.bls.gov/cpi/"
+  },
+  "3": {
+   "n": 3,
+   "category": "Инфляция",
+   "name": "PPI, финальный спрос (MoM / YoY)",
+   "tv_ticker": "ECONOMIC:USPPI",
+   "fred": "PPIACO",
+   "measures": "Изменение отпускных цен производителей; ранний сигнал будущего давления на потребительские цены и маржу.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast; структура goods/services и пересмотры.",
+   "crypto_if_up": "Рост обычно негативен, но слабее CPI; реакция сильнее при резком сюрпризе.",
+   "crypto_if_down": "Падение обычно позитивно через ожидания более мягкой ФРС.",
+   "caveats": "Сильный PPI не всегда переносится в CPI: компании могут принять рост затрат на маржу.",
+   "watch_with": "US02Y, CPI, commodity prices, corporate margins",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.bls.gov/ppi/"
+  },
+  "4": {
+   "n": 4,
+   "category": "Инфляция",
+   "name": "Core PPI YoY",
+   "tv_ticker": null,
+   "fred": null,
+   "measures": "PPI без еды и энергии; показывает более устойчивое давление на производственные цены.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast и предыдущие пересмотры.",
+   "crypto_if_up": "Рост — умеренно негативно; особенно если одновременно растут CPI и доходности.",
+   "crypto_if_down": "Снижение — умеренно позитивно.",
+   "caveats": "Влияние ниже Core CPI/Core PCE, если данные не меняют ожидания по ставке.",
+   "watch_with": "US02Y, Core CPI, Core PCE",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://www.bls.gov/ppi/"
+  },
+  "5": {
+   "n": 5,
+   "category": "Экономический рост",
+   "name": "Real GDP, annualized QoQ",
+   "tv_ticker": "ECONOMIC:USGDP",
+   "fred": "A191RL1Q225SBEA",
+   "measures": "Реальный рост экономики США в пересчете на годовой темп.",
+   "publisher": "BEA",
+   "frequency": "Ежеквартально, 3 оценки",
+   "criterion": "Actual vs forecast; consumption, investment, inventories и inflation deflator.",
+   "crypto_if_up": "Умеренный рост позитивен через risk-on; перегрев может стать негативом через доходности.",
+   "crypto_if_down": "Небольшое замедление иногда позитивно, но рецессионный спад резко негативен для крипто.",
+   "caveats": "GDP — запаздывающий показатель; состав роста важнее headline.",
+   "watch_with": "GDP deflator, personal consumption, US02Y, earnings",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.bea.gov/data/gdp/gross-domestic-product"
+  },
+  "6": {
+   "n": 6,
+   "category": "Монетарная политика",
+   "name": "Решение FOMC по ставке",
+   "tv_ticker": "ECONOMIC:USFEDFUNDS",
+   "fred": "DFEDTARU",
+   "measures": "Целевой диапазон ставки федеральных фондов и направленность политики ФРС.",
+   "publisher": "Federal Reserve",
+   "frequency": "8 раз в год",
+   "criterion": "Решение vs ожидания; statement, dot plot и пресс-конференция важнее самого неизменного решения.",
+   "crypto_if_up": "Повышение/ястребиный сигнал — один из самых сильных негативных факторов для BTC и альткоинов.",
+   "crypto_if_down": "Снижение/голубиный сигнал — сильный позитив, особенно при росте ликвидности.",
+   "caveats": "Снижение ставки из-за финансового стресса может сначала вызвать падение risk assets.",
+   "watch_with": "Dot plot, Powell, SOFR, US02Y, balance sheet",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm"
+  },
+  "7": {
+   "n": 7,
+   "category": "Рынок труда",
+   "name": "Non-Farm Payrolls (NFP)",
+   "tv_ticker": "ECONOMIC:USNFP",
+   "fred": "PAYEMS",
+   "measures": "Изменение числа занятых вне сельского хозяйства.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "NFP actual vs forecast; revisions, unemployment и wages.",
+   "crypto_if_up": "Сильные данные часто негативны, если повышают ожидания ставки; в risk-on режиме могут быть позитивны.",
+   "crypto_if_down": "Небольшая слабость может быть позитивна через ФРС; резкий провал негативен для BTC и особенно альткоинов.",
+   "caveats": "Нельзя анализировать отдельно от зарплат, безработицы и пересмотров.",
+   "watch_with": "Average hourly earnings, unemployment, US02Y, DXY",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://www.bls.gov/news.release/empsit.nr0.htm"
+  },
+  "8": {
+   "n": 8,
+   "category": "Рынок труда",
+   "name": "Уровень безработицы",
+   "tv_ticker": "ECONOMIC:USUNR",
+   "fred": "UNRATE",
+   "measures": "Доля рабочей силы без работы, активно ищущая работу.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast; participation rate и причины изменения.",
+   "crypto_if_up": "Рост умеренно может быть позитивен через rate cuts; резкий рост — негативен из-за recession risk.",
+   "crypto_if_down": "Падение может быть позитивно в risk-on, но негативно при инфляционном перегреве.",
+   "caveats": "Падение безработицы из-за выхода людей из рабочей силы — не обязательно сильный сигнал.",
+   "watch_with": "Participation rate, NFP, claims, Sahm Rule",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.bls.gov/news.release/empsit.nr0.htm"
+  },
+  "9": {
+   "n": 9,
+   "category": "Рынок труда",
+   "name": "Initial Jobless Claims",
+   "tv_ticker": "ECONOMIC:USIJC",
+   "fred": "ICSA",
+   "measures": "Новые заявки на пособие по безработице — наиболее оперативный индикатор увольнений.",
+   "publisher": "U.S. Department of Labor",
+   "frequency": "Еженедельно",
+   "criterion": "Actual vs forecast; 4-week average и continuing claims.",
+   "crypto_if_up": "Рост умеренно может быть позитивен через ожидания снижения ставок; резкий рост негативен.",
+   "crypto_if_down": "Падение может давить на крипто через более жесткие ожидания ФРС.",
+   "caveats": "Сильная сезонность; разовый недельный скачок часто игнорируется.",
+   "watch_with": "4-week average, continuing claims, US02Y",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://fred.stlouisfed.org/series/ICSA"
+  },
+  "10": {
+   "n": 10,
+   "category": "Рынок труда",
+   "name": "JOLTS Job Openings",
+   "tv_ticker": null,
+   "fred": "JTSJOL",
+   "measures": "Количество незакрытых вакансий; индикатор спроса на труд.",
+   "publisher": "BLS",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast; quits rate и hires.",
+   "crypto_if_up": "Рост чаще умеренно негативен через ФРС.",
+   "crypto_if_down": "Умеренное падение может быть позитивно; резкое — негативно.",
+   "caveats": "JOLTS волатилен и пересматривается; quits часто информативнее вакансий.",
+   "watch_with": "Quits rate, hires, NFP, US02Y",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://www.bls.gov/jlt/"
+  },
+  "11": {
+   "n": 11,
+   "category": "Деловая активность",
+   "name": "ISM Manufacturing PMI",
+   "tv_ticker": "ECONOMIC:USPMI",
+   "fred": "NAPM",
+   "measures": "Опрос менеджеров по закупкам в промышленности; >50 — расширение.",
+   "publisher": "ISM",
+   "frequency": "Ежемесячно",
+   "criterion": "Headline, new orders, prices paid и employment.",
+   "crypto_if_up": "Рост позитивен в risk-on, если инфляционный компонент не перегрет.",
+   "crypto_if_down": "Падение умеренно может помочь через ставку, но глубокое сокращение негативно.",
+   "caveats": "Prices Paid может полностью изменить интерпретацию headline.",
+   "watch_with": "New orders, prices paid, copper, yields",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/pmi/june/"
+  },
+  "12": {
+   "n": 12,
+   "category": "Деловая активность",
+   "name": "ISM Services PMI",
+   "tv_ticker": "ECONOMIC:USNMIS",
+   "fred": "NMFCI",
+   "measures": "Активность в секторе услуг — крупнейшей части экономики США; >50 — расширение.",
+   "publisher": "ISM",
+   "frequency": "Ежемесячно",
+   "criterion": "Headline, business activity, prices paid и employment.",
+   "crypto_if_up": "Рост без инфляционного давления позитивен; с высокими prices paid — негативен.",
+   "crypto_if_down": "Падение может быть позитивно через ФРС, пока не возникает recession fear.",
+   "caveats": "Сервисная инфляция сейчас часто важнее manufacturing PMI.",
+   "watch_with": "Prices paid, employment, Core CPI services",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.ismworld.org/"
+  },
+  "13": {
+   "n": 13,
+   "category": "Потребитель",
+   "name": "Retail Sales MoM",
+   "tv_ticker": "ECONOMIC:USRSYOY",
+   "fred": "RSAFS",
+   "measures": "Номинальные продажи розничной торговли и общепита.",
+   "publisher": "U.S. Census Bureau",
+   "frequency": "Ежемесячно",
+   "criterion": "Control group и ex-auto/ex-gas часто важнее headline.",
+   "crypto_if_up": "Рост позитивен в risk-on, но сильный сюрприз может быть негативен через ФРС.",
+   "crypto_if_down": "Умеренное падение иногда позитивно; резкое падение — негативно.",
+   "caveats": "Данные номинальные: рост может отражать инфляцию, а не реальные объемы.",
+   "watch_with": "Control group, real spending, consumer confidence",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://www.census.gov/retail/sales.html"
+  },
+  "14": {
+   "n": 14,
+   "category": "Производство",
+   "name": "Industrial Production MoM",
+   "tv_ticker": "ECONOMIC:USIP",
+   "fred": "INDPRO",
+   "measures": "Объем выпуска промышленности, добычи и коммунальных услуг.",
+   "publisher": "Federal Reserve",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast; manufacturing output и capacity utilization.",
+   "crypto_if_up": "Рост умеренно позитивен через экономику.",
+   "crypto_if_down": "Падение обычно умеренно негативно, если указывает на спад.",
+   "caveats": "Воздействие обычно ниже CPI/NFP/FOMC.",
+   "watch_with": "Capacity utilization, ISM, durable goods",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://www.federalreserve.gov/releases/g17/current/default.htm"
+  },
+  "15": {
+   "n": 15,
+   "category": "Производство",
+   "name": "Capacity Utilization",
+   "tv_ticker": null,
+   "fred": "TCU",
+   "measures": "Доля используемых производственных мощностей.",
+   "publisher": "Federal Reserve",
+   "frequency": "Ежемесячно",
+   "criterion": "Actual vs forecast; долгосрочный средний уровень.",
+   "crypto_if_up": "Рост обычно слабопозитивен, пока не вызывает инфляционные опасения.",
+   "crypto_if_down": "Падение слабонегативно.",
+   "caveats": "Редко самостоятельно двигает рынок.",
+   "watch_with": "Industrial production, PPI, ISM",
+   "power_stocks": 2,
+   "power_crypto": 2,
+   "source_url": "https://www.federalreserve.gov/releases/g17/current/default.htm"
+  },
+  "16": {
+   "n": 16,
+   "category": "Недвижимость",
+   "name": "Housing Starts",
+   "tv_ticker": null,
+   "fred": "HOUST",
+   "measures": "Начатое строительство новых жилых объектов, annualized.",
+   "publisher": "U.S. Census Bureau / HUD",
+   "frequency": "Ежемесячно",
+   "criterion": "Single-family starts важнее волатильного multi-family компонента.",
+   "crypto_if_up": "Рост умеренно позитивен как сигнал экономики.",
+   "crypto_if_down": "Падение умеренно негативно; влияние на крипто обычно слабое.",
+   "caveats": "Headline был усилен скачком multi-family; нужно смотреть single-family.",
+   "watch_with": "Mortgage rates, permits, homebuilder stocks",
+   "power_stocks": 3,
+   "power_crypto": 2,
+   "source_url": "https://www.census.gov/construction/nrc/"
+  },
+  "17": {
+   "n": 17,
+   "category": "Недвижимость",
+   "name": "Building Permits",
+   "tv_ticker": "ECONOMIC:USBP",
+   "fred": "PERMIT",
+   "measures": "Разрешения на строительство — опережающий индикатор будущей стройки.",
+   "publisher": "U.S. Census Bureau / HUD",
+   "frequency": "Ежемесячно",
+   "criterion": "Single-family permits и revisions.",
+   "crypto_if_up": "Рост слабопозитивен.",
+   "crypto_if_down": "Падение слабонегативно.",
+   "caveats": "Влияние ограничено, если mortgage rates движутся в противоположную сторону.",
+   "watch_with": "Mortgage rates, housing starts, NAHB",
+   "power_stocks": 2,
+   "power_crypto": 2,
+   "source_url": "https://www.census.gov/construction/nrc/"
+  },
+  "18": {
+   "n": 18,
+   "category": "Потребитель",
+   "name": "Conference Board Consumer Confidence",
+   "tv_ticker": "ECONOMIC:USCCI",
+   "fred": "CSCICP03USM665S",
+   "measures": "Оценка потребителями текущей ситуации и ожиданий.",
+   "publisher": "The Conference Board",
+   "frequency": "Ежемесячно",
+   "criterion": "Expectations index и labor differential.",
+   "crypto_if_up": "Рост умеренно позитивен для risk appetite.",
+   "crypto_if_down": "Падение умеренно негативно; иногда позитивно через ожидания ставок.",
+   "caveats": "Рынок сильнее реагирует на резкие изменения и labor differential.",
+   "watch_with": "Retail sales, Michigan sentiment, claims",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://www.conference-board.org/topics/consumer-confidence/"
+  },
+  "19": {
+   "n": 19,
+   "category": "Потребитель",
+   "name": "University of Michigan Sentiment",
+   "tv_ticker": null,
+   "fred": "UMCSENT",
+   "measures": "Опрос потребительских настроений и инфляционных ожиданий.",
+   "publisher": "University of Michigan",
+   "frequency": "Дважды в месяц: предварительно/финально",
+   "criterion": "Инфляционные ожидания 1Y/5Y часто важнее headline.",
+   "crypto_if_up": "Рост sentiment позитивен; рост inflation expectations негативен.",
+   "crypto_if_down": "Падение sentiment негативно; падение inflation expectations может быть позитивно.",
+   "caveats": "Необходимо разделять настроение и инфляционные ожидания.",
+   "watch_with": "1Y inflation expectations, retail sales, DXY",
+   "power_stocks": 3,
+   "power_crypto": 3,
+   "source_url": "https://www.sca.isr.umich.edu/"
+  },
+  "20": {
+   "n": 20,
+   "category": "Торговля",
+   "name": "Advance Goods Trade Balance",
+   "tv_ticker": null,
+   "fred": "A939RC0Q052SBEA",
+   "measures": "Разница между экспортом и импортом товаров; дефицит указывается отрицательно.",
+   "publisher": "U.S. Census Bureau",
+   "frequency": "Ежемесячно",
+   "criterion": "Изменение экспорта/импорта и влияние на GDPNow.",
+   "crypto_if_up": "Обычно слабое прямое влияние; важнее через GDP и доллар.",
+   "crypto_if_down": "Обычно слабое прямое влияние.",
+   "caveats": "Нельзя автоматически считать меньший дефицит позитивом без анализа импорта и экспорта.",
+   "watch_with": "GDPNow, inventories, DXY",
+   "power_stocks": 2,
+   "power_crypto": 2,
+   "source_url": "https://www.census.gov/foreign-trade/"
+  },
+  "21": {
+   "n": 21,
+   "category": "Ликвидность",
+   "name": "DXY — индекс доллара",
+   "tv_ticker": "TVC:DXY",
+   "fred": "DTWEXBGS",
+   "measures": "Сила доллара против корзины валют; не макрорелиз, а ключевой рыночный передатчик.",
+   "publisher": "ICE / рыночные данные",
+   "frequency": "Непрерывно",
+   "criterion": "Направление после макрорелиза и пробой ключевых уровней.",
+   "crypto_if_up": "Рост DXY обычно отрицательно коррелирует с BTC и особенно альткоинами.",
+   "crypto_if_down": "Падение DXY обычно поддерживает BTC/ETH и расширение altcoin breadth.",
+   "caveats": "Связь может временно ломаться при safe-haven спросе одновременно на USD и BTC.",
+   "watch_with": "US02Y, US10Y, EURUSD, liquidity",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://fred.stlouisfed.org/series/DTWEXBGS"
+  },
+  "22": {
+   "n": 22,
+   "category": "Ставки и ликвидность",
+   "name": "Доходность US 2Y",
+   "tv_ticker": "TVC:US02Y",
+   "fred": "DGS2",
+   "measures": "Доходность двухлетних Treasuries — наиболее чувствительный рыночный индикатор ожиданий по ставке ФРС.",
+   "publisher": "U.S. Treasury / FRED",
+   "frequency": "Ежедневно",
+   "criterion": "Реакция на CPI/NFP/FOMC и изменение ожиданий terminal rate.",
+   "crypto_if_up": "Рост — сильный негатив для BTC/ETH.",
+   "crypto_if_down": "Падение — сильный позитив, если credit spreads стабильны.",
+   "caveats": "Падение yields на фоне кризиса может совпасть с падением risk assets.",
+   "watch_with": "DXY, FedWatch, US10Y, credit spreads",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://fred.stlouisfed.org/series/DGS2"
+  },
+  "23": {
+   "n": 23,
+   "category": "Ставки и ликвидность",
+   "name": "Доходность US 10Y",
+   "tv_ticker": "TVC:US10Y",
+   "fred": "DGS10",
+   "measures": "Долгосрочная безрисковая ставка и ключевой дисконтный фактор для активов.",
+   "publisher": "U.S. Treasury / FRED",
+   "frequency": "Ежедневно",
+   "criterion": "Изменение реальной доходности и причины движения.",
+   "crypto_if_up": "Рост обычно давит на BTC; альткоины чувствительнее.",
+   "crypto_if_down": "Падение обычно поддерживает крипто.",
+   "caveats": "Рост из-за сильного реального роста менее негативен, чем рост из-за инфляции.",
+   "watch_with": "Real yield, US02Y, DXY, VIX",
+   "power_stocks": 5,
+   "power_crypto": 5,
+   "source_url": "https://fred.stlouisfed.org/series/DGS10"
+  },
+  "24": {
+   "n": 24,
+   "category": "Риск",
+   "name": "VIX",
+   "tv_ticker": "CBOE:VIX",
+   "fred": "VIXCLS",
+   "measures": "Ожидаемая 30-дневная волатильность S&P 500 по опционам.",
+   "publisher": "Cboe",
+   "frequency": "Непрерывно",
+   "criterion": "Направление и term structure; spot VIX vs futures.",
+   "crypto_if_up": "Рост VIX обычно негативен для BTC/альткоинов.",
+   "crypto_if_down": "Падение VIX обычно позитивно для крипто.",
+   "caveats": "При криптоспецифическом событии BTC может падать без сильного роста VIX.",
+   "watch_with": "S&P futures, MOVE, credit spreads, BTC vol",
+   "power_stocks": 4,
+   "power_crypto": 4,
+   "source_url": "https://fred.stlouisfed.org/series/VIXCLS"
+  },
+  "25": {
+   "n": 25,
+   "category": "Ликвидность",
+   "name": "Баланс ФРС, total assets",
+   "tv_ticker": null,
+   "fred": "WALCL",
+   "measures": "Общий размер активов Федеральной резервной системы; индикатор QE/QT и системной ликвидности.",
+   "publisher": "Federal Reserve",
+   "frequency": "Еженедельно",
+   "criterion": "Тренд за несколько недель, а не одно недельное изменение.",
+   "crypto_if_up": "Расширение баланса часто является сильным среднесрочным позитивом для BTC/ETH.",
+   "crypto_if_down": "Сокращение баланса — среднесрочный негатив, особенно при росте Treasury cash balance.",
+   "caveats": "Технические операции могут менять баланс без полноценного QE.",
+   "watch_with": "TGA, RRP, bank reserves, M2",
+   "power_stocks": 4,
+   "power_crypto": 5,
+   "source_url": "https://fred.stlouisfed.org/series/WALCL"
+  }
+ },
+ "by_ticker": {
+  "USIRYY": 1,
+  "USIRMM": 1,
+  "USCIR": 2,
+  "USCIRMM": 2,
+  "USCORECPI": 2,
+  "USPPIMM": 3,
+  "USPPIYY": 3,
+  "USPPI": 3,
+  "USCPPIYY": 4,
+  "USCPPI": 4,
+  "USGDPQQ": 5,
+  "USGDP": 5,
+  "USINTR": 6,
+  "USNFP": 7,
+  "USUR": 8,
+  "USIJC": 9,
+  "USJC4W": 9,
+  "USJO": 10,
+  "USBCOI": 11,
+  "USPMI": 11,
+  "USNMPMI": 12,
+  "USNMIS": 12,
+  "USRSMM": 13,
+  "USRSYOY": 13,
+  "USIPMM": 14,
+  "USIP": 14,
+  "USCU": 15,
+  "USHS": 16,
+  "USBPN": 17,
+  "USBP": 17,
+  "USCCON": 18,
+  "USCCI": 18,
+  "USMCSI": 19,
+  "USBOT": 20
+ },
+ "by_keyword": [
+  {
+   "words": [
+    "inflation rate"
+   ],
+   "row": 1
+  },
+  {
+   "words": [
+    "core inflation"
+   ],
+   "row": 2
+  },
+  {
+   "words": [
+    "ppi",
+    "producer price"
+   ],
+   "row": 3
+  },
+  {
+   "words": [
+    "gdp growth"
+   ],
+   "row": 5
+  },
+  {
+   "words": [
+    "fed interest rate",
+    "fomc",
+    "fed press"
+   ],
+   "row": 6
+  },
+  {
+   "words": [
+    "non farm payroll",
+    "nonfarm"
+   ],
+   "row": 7
+  },
+  {
+   "words": [
+    "unemployment rate"
+   ],
+   "row": 8
+  },
+  {
+   "words": [
+    "initial jobless",
+    "jobless claims"
+   ],
+   "row": 9
+  },
+  {
+   "words": [
+    "jolt"
+   ],
+   "row": 10
+  },
+  {
+   "words": [
+    "ism manufacturing",
+    "manufacturing pmi"
+   ],
+   "row": 11
+  },
+  {
+   "words": [
+    "ism services",
+    "services pmi"
+   ],
+   "row": 12
+  },
+  {
+   "words": [
+    "retail sales"
+   ],
+   "row": 13
+  },
+  {
+   "words": [
+    "industrial production"
+   ],
+   "row": 14
+  },
+  {
+   "words": [
+    "capacity utilization"
+   ],
+   "row": 15
+  },
+  {
+   "words": [
+    "housing starts"
+   ],
+   "row": 16
+  },
+  {
+   "words": [
+    "building permits"
+   ],
+   "row": 17
+  },
+  {
+   "words": [
+    "consumer confidence"
+   ],
+   "row": 18
+  },
+  {
+   "words": [
+    "michigan"
+   ],
+   "row": 19
+  },
+  {
+   "words": [
+    "trade balance"
+   ],
+   "row": 20
+  }
+ ]
+}

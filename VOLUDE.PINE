@@ -1,0 +1,128 @@
+//@version=6
+indicator("Buy/Sell Volume Compact 20% + SMA", overlay=false)
+
+// === Inputs ===
+volumeSmaLength = input.int(20, "Период среднего объёма", minval=1)
+normalizeLength = input.int(100, "Период нормализации объёма", minval=10)
+
+volumeAreaHeight = input.float(20.0, "Максимальная высота объёма, %", minval=5, maxval=30, step=1)
+
+showSma = input.bool(true, "Показывать SMA объёма")
+
+// === Base colors ===
+lightGrayColor = input.color(color.new(color.gray, 45), "Обычный bullish объём")
+darkGrayColor  = input.color(color.new(color.gray, 70), "Обычный bearish объём")
+
+// === Buy signal colors ===
+paleBuyColor   = input.color(color.rgb(120, 220, 160), "Buy 2x / 75%")
+brightBuyColor = input.color(color.rgb(0, 220, 100), "Buy 2.5x / 80%")
+superBuyColor  = input.color(color.rgb(0, 255, 80), "Buy 3x / 90%")
+
+// === Sell signal colors ===
+paleSellColor   = input.color(color.rgb(255, 170, 190), "Sell 2x / 75%")
+brightSellColor = input.color(color.rgb(255, 90, 150), "Sell 2.5x / 80%")
+superSellColor  = input.color(color.rgb(255, 0, 120), "Sell 3x / 90%")
+
+smaColor = input.color(color.orange, "Цвет SMA объёма")
+
+// === Buy/Sell Volume Estimation ===
+// Оценка buy/sell volume через положение close внутри high-low диапазона
+barRange = high - low
+
+buyPercent = barRange != 0 ? ((close - low) / barRange) * 100 : 50
+sellPercent = 100 - buyPercent
+
+// === Average Volume ===
+avgVolume = ta.sma(volume, volumeSmaLength)
+volumeRatio = avgVolume > 0 ? volume / avgVolume : 0
+
+// === Signal Levels ===
+// Buy levels
+buyLevel1 = volumeRatio >= 2.0 and buyPercent >= 75
+buyLevel2 = volumeRatio >= 2.5 and buyPercent >= 80
+buyLevel3 = volumeRatio >= 3.0 and buyPercent >= 90
+
+// Sell levels
+sellLevel1 = volumeRatio >= 2.0 and sellPercent >= 75
+sellLevel2 = volumeRatio >= 2.5 and sellPercent >= 80
+sellLevel3 = volumeRatio >= 3.0 and sellPercent >= 90
+
+// === Compact Volume Scaling ===
+// Объём и SMA масштабируются одинаково,
+// чтобы всё находилось в нижних 20% панели
+highestVolume = ta.highest(volume, normalizeLength)
+
+scaledVolume = highestVolume > 0 ? volume / highestVolume * volumeAreaHeight : 0
+scaledAvgVolume = highestVolume > 0 ? avgVolume / highestVolume * volumeAreaHeight : 0
+
+// === Fixed Scale 0-100 ===
+// Невидимые линии фиксируют шкалу,
+// чтобы объём не занимал всю панель
+plot(100, title="Scale Max", color=color.new(color.white, 100), editable=false)
+plot(0, title="Scale Min", color=color.new(color.white, 100), editable=false)
+
+// === Volume Colors ===
+baseVolumeColor = close >= open ? lightGrayColor : darkGrayColor
+
+volumeColor =
+     buyLevel3  ? superBuyColor :
+     buyLevel2  ? brightBuyColor :
+     buyLevel1  ? paleBuyColor :
+     sellLevel3 ? superSellColor :
+     sellLevel2 ? brightSellColor :
+     sellLevel1 ? paleSellColor :
+     baseVolumeColor
+
+// === Volume Plot ===
+plot(
+     scaledVolume,
+     title="Compact Volume",
+     style=plot.style_columns,
+     color=volumeColor,
+     histbase=0
+ )
+
+// === SMA Volume Line ===
+plot(
+     showSma ? scaledAvgVolume : na,
+     title="Volume SMA",
+     color=smaColor,
+     linewidth=2
+ )
+
+// === Alerts ===
+alertcondition(
+     buyLevel1,
+     title="Buy Volume Level 1",
+     message="Buy condition: volume > 2x average and buy share > 75%"
+ )
+
+alertcondition(
+     buyLevel2,
+     title="Buy Volume Level 2",
+     message="Buy condition: volume > 2.5x average and buy share > 80%"
+ )
+
+alertcondition(
+     buyLevel3,
+     title="Buy Volume Level 3",
+     message="Buy condition: volume > 3x average and buy share > 90%"
+ )
+
+alertcondition(
+     sellLevel1,
+     title="Sell Volume Level 1",
+     message="Sell condition: volume > 2x average and sell share > 75%"
+ )
+
+alertcondition(
+     sellLevel2,
+     title="Sell Volume Level 2",
+     message="Sell condition: volume > 2.5x average and sell share > 80%"
+ )
+
+alertcondition(
+     sellLevel3,
+     title="Sell Volume Level 3",
+     message="Sell condition: volume > 3x average and sell share > 90%"
+ )
