@@ -1160,3 +1160,43 @@ html, body { min-height:100%; background:var(--bg-primary); color:var(--text-pri
   box-shadow: inset 2px 0 0 var(--btc-orange);
 }
 .corr-item:focus-visible { outline: 1px solid var(--btc-orange); outline-offset: -1px; }
+
+/* ══ GOLD PAGE — single chart, no side panels ══════════════════════════ */
+#gold-workspace {
+  flex: 1 1 0;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+#panel-gold { flex: 1 1 0; }
+#panel-gold .chart-main { flex: 1 1 58%; min-height: 200px; }
+
+.gold-ind-area {
+  flex: 1 1 42%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.gold-ind-pane {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+.gold-ind-label {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  z-index: 5;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+  color: var(--text-sec);
+  background: rgba(10,10,16,0.75);
+  padding: 2px 7px;
+  border-radius: 3px;
+  pointer-events: none;
+}

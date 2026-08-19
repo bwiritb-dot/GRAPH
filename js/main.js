@@ -698,6 +698,40 @@ class ChartPanel {
     s.setData(data); this.activeSeries.push(s); return s;
   }
 
+  // Fakes per-bar line colouring (lightweight-charts v4 line series only take
+  // one flat color) by splitting the series into one sub-series per run of
+  // consecutive same-color bars. Each run repeats its predecessor's last
+  // point so the segments visually touch with no gap. Used to mirror
+  // ADX.pine's `color2 = adx > adx[1] ? green : red`.
+  _addColoredLine(times, vals, colorFn, width=1, title='') {
+    const n = times.length;
+    let i = 0;
+    const created = [];
+    while (i < n) {
+      if (vals[i] == null || Number.isNaN(vals[i])) { i++; continue; }
+      const color = colorFn(vals[i], i);
+      const segTimes = [], segVals = [];
+      if (i > 0 && vals[i-1] != null && !Number.isNaN(vals[i-1])) {
+        segTimes.push(times[i-1]); segVals.push(vals[i-1]);
+      }
+      let j = i;
+      while (j < n && vals[j] != null && !Number.isNaN(vals[j]) && colorFn(vals[j], j) === color) {
+        segTimes.push(times[j]); segVals.push(vals[j]);
+        j++;
+      }
+      const isLast = j >= n;
+      const s = this.indChart.addLineSeries({
+        color, lineWidth: width, title: isLast ? title : '',
+        lastValueVisible: isLast, priceLineVisible: false, crosshairMarkerVisible: false,
+      });
+      s.setData(segTimes.map((t, k) => ({ time: t, value: segVals[k] })));
+      this.activeSeries.push(s);
+      created.push(s);
+      i = j;
+    }
+    return created;
+  }
+
   _addHist(data, title='') {
     const s = this.indChart.addHistogramSeries({ lastValueVisible: true, priceLineVisible: false, title });
     s.setData(data); this.activeSeries.push(s); return s;
@@ -872,11 +906,22 @@ class ChartPanel {
     this._hline(s, 50, C.text);
   }
 
+  // Colored like ADX.pine: +DI orange, -DI blue, ADX line green while
+  // rising / red while falling (its color2), signal lines at 20 and 40.
   _rADX(times, ind) {
-    const sa = this._addLine(this._toPts(times, ind.adx), C.yellow, 2, 'ADX');
-    this._addLine(this._toPts(times, ind.dmp), C.green, 1, 'DM+');
-    this._addLine(this._toPts(times, ind.dmm), C.red, 1, 'DM-');
-    this._hline(sa, 25, C.text, 'Trend 25');
+    const s1 = this._addLine(this._toPts(times, ind.dmp), C.orange, 2, '+DI');
+    this._addLine(this._toPts(times, ind.dmm), C.blue, 2, '-DI');
+
+    const adx = ind.adx;
+    const adxColor = (v, i) => {
+      const prev = i > 0 ? adx[i - 1] : null;
+      if (v == null || prev == null) return C.up;
+      return v > prev ? C.up : C.dn;
+    };
+    this._addColoredLine(times, adx, adxColor, 3, 'ADX');
+
+    this._hline(s1, 40, C.white, 'Signal 40');
+    this._hline(s1, 20, C.white, 'Signal 20');
   }
 
   _rCMF(times, ind) {

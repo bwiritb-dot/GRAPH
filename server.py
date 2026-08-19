@@ -76,6 +76,10 @@ def index():
 def options_page():
     return send_from_directory(GRAPH_DIR, "options.html")
 
+@app.get("/gold")
+def gold_page():
+    return send_from_directory(GRAPH_DIR, "gold.html")
+
 @app.get("/lightweight")
 @app.get("/orderbook")
 def lightweight_page():
@@ -153,6 +157,16 @@ TF_INTERVAL = {
     "1h":  ("1h",  500),
     "4h":  ("4h",  500),
     "1d":  ("1d",  365),
+}
+
+# Gold page: no real XAUUSD feed on Binance, so PAXGUSDT (a gold-backed
+# token, tracks spot gold closely) is used as the price proxy — same
+# Binance Futures REST/WS pattern as the rest of this dashboard.
+GOLD_SYMBOL = "PAXGUSDT"
+GOLD_TF_INTERVAL = {
+    "15m": ("15m", 500),
+    "1h":  ("1h",  500),
+    "4h":  ("4h",  500),
 }
 
 
@@ -792,6 +806,129 @@ def calc_adx(df: pd.DataFrame, n: int = 14) -> tuple:
 
 
 # ════════════════════════════════════════════════════════════════════
+#  GOLD PAGE INDICATORS  (LRC · MA Cross · Parabolic SAR · Linear Regression Slope)
+#  UO reuses calc_uo() above — same fixed 7/14/28 periods.
+# ════════════════════════════════════════════════════════════════════
+
+def calc_lrc(df: pd.DataFrame, length: int = 84, mult: float = 2.0) -> tuple:
+    """Linear Regression Channel: basis = least-squares fit endpoint over
+    the trailing window, bands = +-mult * stdev of the fit's residuals."""
+    close = df["Close"].to_numpy(dtype=float)
+    n = len(close)
+    mid   = np.full(n, np.nan)
+    upper = np.full(n, np.nan)
+    lower = np.full(n, np.nan)
+    if n >= length:
+        x = np.arange(length, dtype=float)
+        x_mean = x.mean()
+        x_var  = ((x - x_mean) ** 2).sum()
+        for i in range(length - 1, n):
+            y = close[i - length + 1:i + 1]
+            y_mean = y.mean()
+            slope  = ((x - x_mean) * (y - y_mean)).sum() / x_var
+            intercept = y_mean - slope * x_mean
+            fitted_end = intercept + slope * x[-1]
+            resid  = y - (intercept + slope * x)
+            stdev  = resid.std(ddof=0)
+            mid[i]   = fitted_end
+            upper[i] = fitted_end + mult * stdev
+            lower[i] = fitted_end - mult * stdev
+    idx = df.index
+    return pd.Series(mid, index=idx), pd.Series(upper, index=idx), pd.Series(lower, index=idx)
+
+
+def calc_ma_cross(df: pd.DataFrame, fast: int = 9, slow: int = 26) -> tuple:
+    ma_fast = df["Close"].rolling(fast).mean()
+    ma_slow = df["Close"].rolling(slow).mean()
+    return ma_fast, ma_slow
+
+
+def calc_psar(df: pd.DataFrame, start: float = 0.02, incr: float = 0.02, max_af: float = 0.2) -> pd.Series:
+    """Wilder's Parabolic SAR — mirrors Pine's built-in sar(start, incr, max)."""
+    high  = df["High"].to_numpy(dtype=float)
+    low   = df["Low"].to_numpy(dtype=float)
+    n = len(high)
+    sar = np.full(n, np.nan)
+    if n == 0:
+        return pd.Series(sar, index=df.index)
+
+    trend_up = True
+    af  = start
+    ep  = high[0]
+    val = low[0]
+    sar[0] = val
+
+    for i in range(1, n):
+        val = val + af * (ep - val)
+        if trend_up:
+            val = min(val, low[i - 1], low[i - 2] if i >= 2 else low[i - 1])
+            if low[i] < val:
+                trend_up, val, ep, af = False, ep, low[i], start
+            elif high[i] > ep:
+                ep = high[i]
+                af = min(af + incr, max_af)
+        else:
+            val = max(val, high[i - 1], high[i - 2] if i >= 2 else high[i - 1])
+            if high[i] > val:
+                trend_up, val, ep, af = True, ep, high[i], start
+            elif low[i] < ep:
+                ep = low[i]
+                af = min(af + incr, max_af)
+        sar[i] = val
+
+    return pd.Series(sar, index=df.index)
+
+
+def calc_linreg_slope(df: pd.DataFrame, length: int = 7) -> pd.Series:
+    """Least-squares slope of Close over the trailing window (price/bar)."""
+    close = df["Close"].to_numpy(dtype=float)
+    n = len(close)
+    slope = np.full(n, np.nan)
+    if n >= length:
+        x = np.arange(length, dtype=float)
+        x_mean = x.mean()
+        x_var  = ((x - x_mean) ** 2).sum()
+        for i in range(length - 1, n):
+            y = close[i - length + 1:i + 1]
+            slope[i] = ((x - x_mean) * (y - y.mean())).sum() / x_var
+    return pd.Series(slope, index=df.index)
+
+
+def calc_gold_indicators(df: pd.DataFrame) -> dict:
+    out = {}
+
+    def safe(key, fn):
+        try:
+            out[key] = _ser(fn())
+        except Exception as e:
+            log.error("[gold:%s] %s", key, e)
+            out[key] = [None] * len(df)
+
+    try:
+        mid, upper, lower = calc_lrc(df, 84, 2.0)
+        out["lrc_mid"]   = _ser(mid)
+        out["lrc_upper"] = _ser(upper)
+        out["lrc_lower"] = _ser(lower)
+    except Exception as e:
+        log.error("[gold:lrc] %s", e)
+        out["lrc_mid"] = out["lrc_upper"] = out["lrc_lower"] = [None] * len(df)
+
+    try:
+        ma_fast, ma_slow = calc_ma_cross(df, 9, 26)
+        out["ma_fast"] = _ser(ma_fast)
+        out["ma_slow"] = _ser(ma_slow)
+    except Exception as e:
+        log.error("[gold:ma_cross] %s", e)
+        out["ma_fast"] = out["ma_slow"] = [None] * len(df)
+
+    safe("sar",          lambda: calc_psar(df, 0.02, 0.02, 0.2))
+    safe("uo",            lambda: calc_uo(df))
+    safe("linreg_slope", lambda: calc_linreg_slope(df, 7))
+
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════
 #  AGGREGATE
 # ════════════════════════════════════════════════════════════════════
 
@@ -899,6 +1036,44 @@ def data(tf: str):
             timeframe  = tf,
             instrument = symbol,
             source     = "Binance Futures",
+            ohlcv      = ohlcv,
+            indicators = ind,
+            ts         = int(time.time()),
+        )
+    except requests.RequestException as e:
+        log.error("Binance error: %s", e)
+        return jsonify(error=str(e)), 503
+    except Exception as e:
+        log.exception("Unexpected error")
+        return jsonify(error=str(e)), 500
+
+
+@app.get("/api/gold/<tf>")
+def gold_data(tf: str):
+    if tf not in GOLD_TF_INTERVAL:
+        return jsonify(error=f"Unknown timeframe: {tf}"), 400
+    try:
+        interval, limit = GOLD_TF_INTERVAL[tf]
+        df = get_klines(GOLD_SYMBOL, interval, limit)
+        if df.empty:
+            return jsonify(error="No data from Binance Futures"), 503
+
+        ind   = calc_gold_indicators(df)
+        ohlcv = [
+            {
+                "time":  int(row["time"]),
+                "open":  float(row["Open"]),
+                "high":  float(row["High"]),
+                "low":   float(row["Low"]),
+                "close": float(row["Close"]),
+                "volume": float(row["Volume"]),
+            }
+            for _, row in df.iterrows()
+        ]
+        return jsonify(
+            timeframe  = tf,
+            instrument = GOLD_SYMBOL,
+            source     = "Binance Futures (PAXG/USDT proxy)",
             ohlcv      = ohlcv,
             indicators = ind,
             ts         = int(time.time()),
