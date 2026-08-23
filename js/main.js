@@ -15,12 +15,24 @@ const SYMBOL = 'BTCUSDT';
 let ACTIVE_SYMBOL = SYMBOL;
 let ACTIVE_TF     = '5m';
 
-const ALL_TFS = ['5m', '15m', '30m', '1h', '4h', '1d'];
+const ALL_TFS = ['5m', '15m', '30m', '1h', '4h'];
+
+function isProTier() {
+  return typeof window !== 'undefined' && localStorage.getItem('cdx_pro_unlocked') === 'true';
+}
+
+function updateTierUI() {
+  const isPro = isProTier();
+  const badge = document.getElementById('tier-badge');
+  if (badge) {
+    badge.className = isPro ? 'pro-badge' : 'free-badge';
+    badge.textContent = isPro ? '⭐ PRO ACTIVE' : 'FREE TIER 🔑';
+    badge.title = isPro ? 'PRO Доступ активен' : 'Нажмите для ввода сид-фразы и активации PRO';
+  }
+}
 
 // Every timeframe's last payload, kept so the indicator table can follow the
-// crosshair on all six rows at once. loadAll() used to fetch these, write the
-// final bar into the table and throw the rest away, which is why hovering the
-// chart only ever moved the active timeframe's row.
+// crosshair on all rows at once.
 const TF_CACHE = Object.create(null);
 
 // Index of the last bar that had already opened at time `t` — i.e. the bar
@@ -173,9 +185,16 @@ function getState(thKey, value) {
 
 function updateTableRow(tf, ind, idx) {
   if (!ind) return;
+  const isPro = isProTier();
   for (const col of IND_TABLE_COLS) {
     const el = document.getElementById(`tc-${tf}-${col.key}`);
     if (!el) continue;
+    const isFreeAllowed = (col.key === 'rsi' || col.key === 'adx' || col.key === 'dmp' || col.key === 'dmm');
+    if (!isPro && !isFreeAllowed) {
+      el.textContent = '🔒';
+      el.className = 'ind-cell pro-locked';
+      continue;
+    }
     const raw = ind[col.key]?.[idx];
     const v   = (raw !== null && raw !== undefined && !Number.isNaN(+raw)) ? +raw : null;
     el.textContent = v !== null ? col.fmt(v) : '—';
@@ -358,16 +377,18 @@ class ChartPanel {
     });
 
     // Build indicator tabs
+    this.rebuildTabs();
     if (this.tabsEl) {
-      this.tabsEl.innerHTML = IND_TABS.map(t =>
-        `<button class="tab-btn${t.id === this.activeTab ? ' active' : ''}"
-                 data-tab="${t.id}" title="${t.title}">${t.label}</button>`
-      ).join('');
-
       this.tabsEl.addEventListener('click', e => {
         const btn = e.target.closest('.tab-btn');
         if (!btn) return;
         const tab = btn.dataset.tab;
+        const isPro = isProTier();
+        const isFree = (tab === 'rsi' || tab === 'adx');
+        if (!isPro && !isFree) {
+          window.ProAuth?.open();
+          return;
+        }
         this.tabsEl.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         this.activeTab = tab;
         this._renderIndicator(tab);
@@ -375,6 +396,22 @@ class ChartPanel {
     }
 
     this._syncTimeScales();
+  }
+
+  rebuildTabs() {
+    if (!this.tabsEl) return;
+    const isPro = isProTier();
+    if (!isPro && this.activeTab !== 'rsi' && this.activeTab !== 'adx') {
+      this.activeTab = 'rsi';
+    }
+    this.tabsEl.innerHTML = IND_TABS.map(t => {
+      const isFree = (t.id === 'rsi' || t.id === 'adx');
+      const locked = (!isPro && !isFree) ? ' pro-locked' : '';
+      const title = (!isPro && !isFree) ? `${t.title} (PRO ONLY)` : t.title;
+      return `<button class="tab-btn${t.id === this.activeTab ? ' active' : ''}${locked}"
+               data-tab="${t.id}" title="${title}">${t.label}</button>`;
+    }).join('');
+    this._renderIndicator(this.activeTab);
   }
 
   _syncTimeScales() {
@@ -1211,6 +1248,10 @@ class Dashboard {
       setTimeout(() => { el.style.color = ''; }, 800);
     }
     this.prevPrice = price;
+
+    // Evaluate active alarms on each tick
+    const ind = this.panel?.data?.indicators;
+    window.AlarmsUI?.evaluateTick(ACTIVE_SYMBOL, price, ind);
   }
 
   _spinning(on) { document.getElementById('btn-refresh')?.classList.toggle('spinning', on); }
@@ -1231,6 +1272,8 @@ class Dashboard {
     this.prevPrice = null;
     this.corrWidget.markActive(symbol);
     this._updateSymbolLabels();
+    const btnTxt = document.getElementById('active-symbol-btn-txt');
+    if (btnTxt) btnTxt.textContent = symbol;
     try {
       this.liveFeed.disconnect();
       await this.loadAll();
@@ -1254,6 +1297,158 @@ class Dashboard {
   refreshCorr() { this.corrWidget.refresh(); }
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  SymbolSelector: Search and select ANY Binance Futures contract
+// ════════════════════════════════════════════════════════════════════
+class SymbolSelector {
+  constructor() {
+    this.wrapEl = document.getElementById('symbol-selector-wrap');
+    this.btnEl = document.getElementById('symbol-select-btn');
+    this.btnTxt = document.getElementById('active-symbol-btn-txt');
+    this.dropdownEl = document.getElementById('symbol-dropdown');
+    this.inputEl = document.getElementById('symbol-search-input');
+    this.listEl = document.getElementById('symbol-list');
+    this.symbols = [];
+
+    this._init();
+  }
+
+  async _init() {
+    if (!this.btnEl) return;
+    this.btnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggle();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (this.dropdownEl && !this.wrapEl?.contains(e.target)) {
+        this.dropdownEl.classList.remove('open');
+      }
+    });
+
+    if (this.inputEl) {
+      this.inputEl.addEventListener('input', () => this.filter());
+      this.inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const val = this.inputEl.value.trim().toUpperCase();
+          if (val) {
+            const sym = val.endsWith('USDT') ? val : `${val}USDT`;
+            this.select(sym);
+          }
+        }
+      });
+    }
+
+    await this.fetchSymbols();
+  }
+
+  toggle() {
+    if (!this.dropdownEl) return;
+    const isOpen = this.dropdownEl.classList.toggle('open');
+    if (isOpen && this.inputEl) {
+      this.inputEl.value = '';
+      this.inputEl.focus();
+      this.render(this.symbols);
+    }
+  }
+
+  async fetchSymbols() {
+    try {
+      const res = await fetch(`${API}/symbols`);
+      const d = await res.json();
+      this.symbols = d.symbols || [];
+    } catch (e) {
+      this.symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'DOGEUSDT', 'XRPUSDT', 'PEPEUSDT', 'SUIUSDT'];
+    }
+  }
+
+  filter() {
+    const q = (this.inputEl?.value || '').trim().toUpperCase();
+    if (!q) {
+      this.render(this.symbols);
+      return;
+    }
+    const filtered = this.symbols.filter(s => s.includes(q));
+    this.render(filtered);
+  }
+
+  render(list) {
+    if (!this.listEl) return;
+    const q = (this.inputEl?.value || '').trim().toUpperCase();
+    const displayList = list.slice(0, 40);
+    let html = '';
+    if (q && !list.includes(q) && !list.includes(`${q}USDT`)) {
+      const customSym = q.endsWith('USDT') ? q : `${q}USDT`;
+      html += `<div class="symbol-option" data-sym="${customSym}"><span class="sym-name">+ ${customSym}</span><span class="sym-tag">CUSTOM PERP</span></div>`;
+    }
+    html += displayList.map(s => {
+      const isSel = s === ACTIVE_SYMBOL ? ' selected' : '';
+      const base = s.replace(/USDT$/, '');
+      return `<div class="symbol-option${isSel}" data-sym="${s}"><span class="sym-name">${base}</span><span class="sym-tag">USDT PERP</span></div>`;
+    }).join('');
+
+    this.listEl.innerHTML = html;
+    this.listEl.querySelectorAll('.symbol-option').forEach(el => {
+      el.addEventListener('click', () => {
+        const sym = el.dataset.sym;
+        if (sym) this.select(sym);
+      });
+    });
+  }
+
+  select(sym) {
+    if (this.dropdownEl) this.dropdownEl.classList.remove('open');
+    if (this.btnTxt) this.btnTxt.textContent = sym;
+    window.dashboard?.setSymbol(sym);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ProAuth: Seed Phrase Authentication
+// ════════════════════════════════════════════════════════════════════
+const ProAuth = {
+  modalEl: document.getElementById('modal-pro'),
+  open() {
+    if (this.modalEl) this.modalEl.classList.add('open');
+    const msg = document.getElementById('pro-unlock-msg');
+    if (msg) msg.textContent = '';
+  },
+  close() {
+    if (this.modalEl) this.modalEl.classList.remove('open');
+  },
+  async submitPhrase() {
+    const phrase = document.getElementById('pro-seed-phrase')?.value.trim() || '';
+    const msg = document.getElementById('pro-unlock-msg');
+    if (!phrase) {
+      if (msg) msg.innerHTML = '<span style="color:var(--red)">Введите сид-фразу</span>';
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        localStorage.setItem('cdx_pro_unlocked', 'true');
+        if (msg) msg.innerHTML = '<span style="color:var(--green)">✅ PRO Доступ активирован!</span>';
+        setTimeout(() => {
+          this.close();
+          updateTierUI();
+          window.dashboard?.panel?.rebuildTabs();
+          window.Zones?.load(ACTIVE_SYMBOL);
+        }, 800);
+      } else {
+        if (msg) msg.innerHTML = '<span style="color:var(--red)">❌ Неверная сид-фраза</span>';
+      }
+    } catch (e) {
+      if (msg) msg.innerHTML = '<span style="color:var(--red)">Ошибка проверки</span>';
+    }
+  }
+};
+window.ProAuth = ProAuth;
+
 function log(tag, msg) { console.log(`[${tag}] ${msg}`); }
 
 function initPageLinks() {
@@ -1271,6 +1466,12 @@ function initPageLinks() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   initPageLinks();
+  updateTierUI();
+  document.getElementById('tier-badge')?.addEventListener('click', () => window.ProAuth?.open());
+
+  const symSelector = new SymbolSelector();
+  window.symbolSelector = symSelector;
+
   const dash = new Dashboard();
   window.dashboard = dash;
   await dash.init();

@@ -13,7 +13,7 @@ function getAppBaseUrl() {
 
 const API = `${getAppBaseUrl()}/api`;
 const GOLD_SYMBOL = 'PAXGUSDT';
-const GOLD_TFS = ['15m', '1h', '4h'];
+const GOLD_TFS = ['15m', '1h', '4h', '1d'];
 let ACTIVE_TF = '15m';
 
 const PRICE_SCALE_WIDTH = 82;

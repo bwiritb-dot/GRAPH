@@ -161,12 +161,11 @@ class MacroCalendar:
             log.warning("[macro] restore failed: %s", e)
 
     # ── fetching ────────────────────────────────────────────────────────
-    def _fetch(self) -> list[dict]:
-        now = dt.datetime.now(dt.timezone.utc)
-        frm = (now - dt.timedelta(days=LOOKBACK_DAYS)).strftime("%Y-%m-%dT00:00:00.000Z")
-        to = (now + dt.timedelta(days=LOOKAHEAD_DAYS)).strftime("%Y-%m-%dT00:00:00.000Z")
+    def _fetch_window(self, frm_dt: dt.datetime, to_dt: dt.datetime) -> list[dict]:
+        frm = frm_dt.strftime("%Y-%m-%dT00:00:00.000Z")
+        to = to_dt.strftime("%Y-%m-%dT00:00:00.000Z")
         url = f"{TV_URL}?from={frm}&to={to}&countries={COUNTRIES}"
-        with urlopen(Request(url, headers=TV_HEADERS), timeout=30) as r:
+        with urlopen(Request(url, headers=TV_HEADERS), timeout=15) as r:
             payload = json.load(r)
         if payload.get("status") != "ok":
             raise RuntimeError(f"calendar status={payload.get('status')}")
@@ -201,6 +200,12 @@ class MacroCalendar:
         out.sort(key=lambda x: x["ts"])
         return out
 
+    def _fetch(self) -> list[dict]:
+        now = dt.datetime.now(dt.timezone.utc)
+        frm_dt = now - dt.timedelta(days=LOOKBACK_DAYS)
+        to_dt = now + dt.timedelta(days=LOOKAHEAD_DAYS)
+        return self._fetch_window(frm_dt, to_dt)
+
     def refresh(self) -> bool:
         try:
             events = self._fetch()
@@ -220,10 +225,48 @@ class MacroCalendar:
                  len(events), MIN_IMPORTANCE, COUNTRIES)
         return True
 
+    def _fast_poll_if_needed(self):
+        """If any event is within -300s to +60s of now without an actual value,
+        poll a narrow 1-day window every 3 seconds so actual data arrives on the exact minute."""
+        now_ts = time.time()
+        with self._lock:
+            pending = [
+                e for e in self._events
+                if (now_ts - 300 <= e["ts"] <= now_ts + 60) and e.get("actual") is None
+            ]
+        if not pending:
+            return
+
+        now = dt.datetime.now(dt.timezone.utc)
+        try:
+            recent_events = self._fetch_window(now - dt.timedelta(days=1), now + dt.timedelta(days=1))
+            updated_any = False
+            with self._lock:
+                event_map = {e["id"]: e for e in self._events}
+                for re in recent_events:
+                    old = event_map.get(re["id"])
+                    if old and old.get("actual") != re.get("actual") and re.get("actual") is not None:
+                        event_map[re["id"]] = re
+                        updated_any = True
+                        log.info("[macro-fast-poll] Actual received immediately for %s: %s", re["title"], re["actual"])
+                if updated_any:
+                    self._events = sorted(event_map.values(), key=lambda x: x["ts"])
+                    self._save(self._events)
+                    self.last_fetch = time.time()
+        except Exception as e:
+            log.debug("[macro-fast-poll] error: %s", e)
+
     def _loop(self):
+        last_full_refresh = 0.0
         while not self._stop:
-            self.refresh()
-            time.sleep(REFRESH_SECONDS)
+            now = time.time()
+            if now - last_full_refresh >= REFRESH_SECONDS:
+                self.refresh()
+                last_full_refresh = now
+
+            # Adaptive fast polling for imminent / released events
+            self._fast_poll_if_needed()
+            time.sleep(3)  # Loop sleep 3s to allow instant event catching
 
     def start(self):
         threading.Thread(target=self._loop, name="macro-calendar", daemon=True).start()

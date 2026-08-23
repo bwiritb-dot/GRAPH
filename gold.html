@@ -31,19 +31,20 @@
     </div>
     <div class="header-divider"></div>
     <nav class="page-switcher" aria-label="Dashboard pages">
-      <a class="page-link" data-path="/" href="/">Futures</a>
-      <a class="page-link" data-path="/options" href="/options">Options</a>
-      <a class="page-link" data-path="/orderbook" href="/orderbook">Order Book</a>
+      <a class="page-link" data-path="/" href="/">Crypto</a>
+      <a class="page-link" data-path="/options" href="/options" style="display:none">Options</a>
+      <a class="page-link" data-path="/orderbook" href="/orderbook" style="display:none">Order Book</a>
       <a class="page-link active" data-path="/gold" href="/gold">Gold</a>
     </nav>
     <div class="header-divider"></div>
 
-    <!-- Timeframe selector — Gold page only supports 15m / 1H / 4H -->
+    <!-- Timeframe selector — Gold page supports 15m / 1H / 4H / 1D -->
     <div class="hdr-tf-bar" id="hdr-tf-bar">
       <span class="tf-label-title">TF:</span>
       <button class="tf-btn active" data-tf="15m">15m</button>
       <button class="tf-btn" data-tf="1h">1H</button>
       <button class="tf-btn" data-tf="4h">4H</button>
+      <button class="tf-btn" data-tf="1d">1D</button>
     </div>
 
     <div class="header-divider"></div>

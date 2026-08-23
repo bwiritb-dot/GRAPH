@@ -731,12 +731,73 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       };
       for (const { leg, prof } of s.legProfiles || []) drawLegProfile(leg, prof);
 
-      // ── 3) CONFIRMED HVN ZONES (repeat on 3+ legs, same direction) ──────
-      // Horizontal bands, extending right from the most recent contributing
-      // leg's end. Intact: solid + bright. Broken (price passed clean
-      // through after that leg): dashed + faded + ✗. The ×N repeat-count
-      // badge is the only visible proof the "3+ profiles" rule was applied,
-      // not just eyeballed off a single leg.
+      const isPro = typeof window !== 'undefined' && localStorage.getItem('cdx_pro_unlocked') === 'true';
+
+      // ── 1) LIQUIDATION PROFILE (Pro only) ───────────────────────────
+      if (isPro) {
+        if (s.heat && s.heat.length && s.heatSnapshot) {
+          const hm = s.heatSnapshot;
+          const maxUsd = hm.maxUsd || 1;
+          for (const b of hm.bars) {
+            const y0 = yOf(b.p1), y1 = yOf(b.p0);
+            if (y0 === null || y1 === null || y1 < 0 || y0 > h) continue;
+            const barW = Math.min(w * ZCFG.maxLiqWidthFrac, (b.usd / maxUsd) * (w * ZCFG.maxLiqWidthFrac));
+            if (barW < 1) continue;
+            const rh = Math.max(1, y1 - y0 - 0.5);
+            ctx.fillStyle = `rgba(0, 212, 255, ${0.15 + 0.45 * (b.usd / maxUsd)})`;
+            ctx.fillRect(0, y0, barW, rh);
+          }
+        }
+      }
+
+      // ── 2) MONTHLY ZIGZAG LEG PROFILES (Pro only) ───────────────────
+      if (isPro) {
+        const drawLegProfile = (leg, prof) => {
+          if (!prof || !prof.rows?.length) return;
+          const bx0 = xOf(leg.t0), bx1 = xOf(leg.t1);
+          if (bx0 === null || bx1 === null) return;
+          if (bx1 < 0 || bx0 > w || bx1 - bx0 < 2) return;
+
+          const yHi = yOf(leg.pHi), yLo = yOf(leg.pLo);
+          if (yHi === null || yLo === null) return;
+          const rgb = leg.isUp ? COL.legUp : COL.legDown;
+
+          ctx.fillStyle = `rgba(${rgb},0.015)`;
+          ctx.fillRect(bx0, yHi, bx1 - bx0, yLo - yHi);
+
+          const yVaHi = yOf(prof.vaHigh), yVaLo = yOf(prof.vaLow);
+          if (yVaHi !== null && yVaLo !== null) {
+            ctx.fillStyle = `rgba(${rgb},0.02)`;
+            ctx.fillRect(bx0, yVaHi, bx1 - bx0, yVaLo - yVaHi);
+          }
+
+          const maxBar = (bx1 - bx0) * 0.8;
+          if (maxBar >= 10) {
+            for (const row of prof.rows) {
+              if (!row.total) continue;
+              const y0 = yOf(row.p1), y1 = yOf(row.p0);
+              if (y0 === null || y1 === null || y1 < 0 || y0 > h) continue;
+              const rh = Math.max(1, y1 - y0 - 0.5);
+              const bw = (row.total / prof.maxTotal) * maxBar;
+              const buyW = bw * (row.buy / row.total);
+              ctx.fillStyle = COL.volBuy;
+              ctx.fillRect(bx0, y0, buyW, rh);
+              ctx.fillStyle = COL.volSell;
+              ctx.fillRect(bx0 + buyW, y0, bw - buyW, rh);
+            }
+          }
+
+          const yPoc = yOf(prof.poc);
+          if (yPoc !== null && yPoc >= 0 && yPoc <= h) {
+            ctx.strokeStyle = COL.pocLine;
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(bx0, yPoc + 0.5); ctx.lineTo(bx1, yPoc + 0.5); ctx.stroke();
+          }
+        };
+        for (const { leg, prof } of s.legProfiles || []) drawLegProfile(leg, prof);
+      }
+
+      // ── 3) CONFIRMED HVN ZONES (Available in BOTH Free & Pro tiers) ──
       const drawHvn = z => {
         const rgb = z.isUp ? COL.legUp : COL.legDown;
         let zx0 = xOf(z.fromTime);
@@ -762,28 +823,27 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       };
       for (const z of s.hvnZones || []) drawHvn(z);
 
-      // ── 4) SIGNIFICANT LIQUIDATION ZONES (20%+ jump over what's before it) ──
-      // Full-width horizontal ray at the zone's price — this is a price
-      // level, not a moment in time, so (unlike the weekly moves above) it
-      // has to span the whole chart rather than sit between two timestamps.
-      const base = (this.ctrl.symbol || 'BTCUSDT').replace(/USDT$/, '');
-      for (const z of s.sigLiqZones || []) {
-        const y = yOf(z.price);
-        if (y === null || y < 0 || y > h) continue;
-        const rgb = z.side === 'BUY' ? COL.legDown : COL.legUp; // BUY=above price=short=red, SELL=below=long=green
+      // ── 4) SIGNIFICANT LIQUIDATION ZONES (Pro only) ──────────────────
+      if (isPro) {
+        const base = (this.ctrl.symbol || 'BTCUSDT').replace(/USDT$/, '');
+        for (const z of s.sigLiqZones || []) {
+          const y = yOf(z.price);
+          if (y === null || y < 0 || y > h) continue;
+          const rgb = z.side === 'BUY' ? COL.legDown : COL.legUp;
 
-        ctx.strokeStyle = `rgba(${rgb},0.7)`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([6, 4]);
-        ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke();
-        ctx.setLineDash([]);
+          ctx.strokeStyle = `rgba(${rgb},0.7)`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke();
+          ctx.setLineDash([]);
 
-        const qty = z.qty != null ? z.qty : (z.price ? z.usd / z.price : 0);
-        ctx.font = "bold 10px 'JetBrains Mono', monospace";
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'bottom';
-        ctx.fillStyle = `rgba(${rgb},0.95)`;
-        ctx.fillText(`⚠ ${qty.toFixed(2)} ${base} · ${fmtM(z.usd)}`, w - axisW - 6, y - 3);
+          const qty = z.qty != null ? z.qty : (z.price ? z.usd / z.price : 0);
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = `rgba(${rgb},0.95)`;
+          ctx.fillText(`⚠ ${qty.toFixed(2)} ${base} · ${fmtM(z.usd)}`, w - axisW - 6, y - 3);
+        }
       }
     }
 

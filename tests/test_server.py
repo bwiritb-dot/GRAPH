@@ -84,24 +84,25 @@ def _clear_caches():
 
 def _fake_cg(heatmap):
     mod = types.SimpleNamespace()
-    mod.fetch_heatmap = lambda **kw: ({"data": heatmap} if heatmap is not None else None)
+    mod.fetch_liq_heatmap_binance = lambda **kw: heatmap
+    mod.parse_heatmap = lambda raw: []
     return mod
 
 
 def test_liquidations_ok(monkeypatch):
     monkeypatch.setattr(server, "get_coinglass", lambda: _fake_cg(_heatmap()))
-    r = server.app.test_client().get("/api/liquidations?symbol=BTCUSDT")
+    r = server.app.test_client().get("/api/liquidations/heatmap?symbol=BTCUSDT")
     d = r.get_json()
     assert r.status_code == 200 and d["ok"] is True
-    assert d["symbol"] == "BTCUSDT" and len(d["levels"]) == 2
+    assert d["symbol"] == "BTCUSDT" and len(d["records"]) == 2
 
 
 def test_liquidations_soft_fail_on_none(monkeypatch):
     monkeypatch.setattr(server, "get_coinglass", lambda: _fake_cg(None))
-    r = server.app.test_client().get("/api/liquidations?symbol=ETHUSDT")
+    r = server.app.test_client().get("/api/liquidations/heatmap?symbol=ETHUSDT")
     d = r.get_json()
-    assert r.status_code == 200 and d["ok"] is False
-    assert d["levels"] == [] and "error" in d and d["symbol"] == "ETHUSDT"
+    assert r.status_code == 502 and d["ok"] is False
+    assert "error" in d and d["source"] == "CoinGlass"
 
 
 # ── /api/data + /api/correlations (monkeypatched klines) ─────────────────────
@@ -135,3 +136,104 @@ def test_correlations_btc_first_row(monkeypatch):
     assert d["top10"][0]["symbol"] == "BTC"
     assert d["top10"][0]["correlation"] == 1.0
     assert d["top10"][0]["full_symbol"] == "BTCUSDT"
+
+
+def test_symbols_endpoint():
+    r = server.app.test_client().get("/api/symbols")
+    assert r.status_code == 200
+    d = r.get_json()
+    assert "symbols" in d and "BTCUSDT" in d["symbols"]
+
+
+def test_alarms_crud():
+    client = server.app.test_client()
+    # Create alarm
+    r = client.post("/api/alarms", json={
+        "symbol": "ETHUSDT",
+        "type": "price_cross_above",
+        "threshold": 4000.0,
+        "sound": "chime",
+        "channels": ["audio", "telegram"]
+    })
+    assert r.status_code == 201
+    alarm = r.get_json()["alarm"]
+    alarm_id = alarm["id"]
+    assert alarm["symbol"] == "ETHUSDT"
+
+    # List alarms
+    r = client.get("/api/alarms?symbol=ETHUSDT")
+    assert any(a["id"] == alarm_id for a in r.get_json()["alarms"])
+
+    # Toggle alarm
+    r = client.post(f"/api/alarms/{alarm_id}/toggle")
+    assert r.status_code == 200
+    assert r.get_json()["alarm"]["enabled"] is False
+
+    # Delete alarm
+    r = client.delete(f"/api/alarms/{alarm_id}")
+    assert r.status_code == 200
+
+
+def test_auth_verify():
+    client = server.app.test_client()
+    # Valid seed phrase
+    r = client.post("/api/auth/verify", json={"phrase": "crypto datex pro alpha"})
+    assert r.status_code == 200
+    assert r.get_json()["tier"] == "PRO"
+
+    # Invalid seed phrase
+    r = client.post("/api/auth/verify", json={"phrase": "wrong"})
+    assert r.status_code == 401
+
+
+def test_timeframe_contracts():
+    assert "1d" not in server.TF_INTERVAL
+    assert "5m" in server.TF_INTERVAL
+    assert "1d" in server.GOLD_TF_INTERVAL
+
+
+def test_email_api():
+    client = server.app.test_client()
+    # Save config
+    r = client.post("/api/email/config", json={
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "use_tls": True,
+        "user": "test@example.com",
+        "to": "trader@example.com",
+        "password": "secretpassword"
+    })
+    assert r.status_code == 200
+    # Read config (password masked)
+    r = client.get("/api/email/config")
+    assert r.status_code == 200
+    cfg = r.get_json()
+    assert cfg["to"] == "trader@example.com"
+    assert cfg["has_password"] is True
+
+
+def test_alarm_trigger_evaluation():
+    client = server.app.test_client()
+    r = client.post("/api/alarms", json={
+        "symbol": "SOLUSDT",
+        "type": "price_cross_above",
+        "threshold": 200.0,
+        "sound": "siren",
+        "channels": ["audio"]
+    })
+    alarm = r.get_json()["alarm"]
+    alarm_id = alarm["id"]
+
+    # Trigger evaluate via _alarms manager
+    res = server._alarms.evaluate_tick(
+        symbol="SOLUSDT",
+        price=205.0,
+        indicators={},
+        prev_price=195.0
+    )
+    assert any(t["id"] == alarm_id for t in res)
+
+    # Cleanup
+    server._alarms.delete(alarm_id)
+
+

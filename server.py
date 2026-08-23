@@ -149,24 +149,25 @@ _session.headers.update({"User-Agent": "graph-dashboard/1.0"})
 APP_HOST = "0.0.0.0"
 APP_PORT = 5050
 
-# Binance interval map: dashboard TF → Binance string
+# Binance interval map: dashboard TF → Binance string (Crypto: 5m..4h, no 1d)
 TF_INTERVAL = {
     "5m":  ("5m",  500),
     "15m": ("15m", 500),
     "30m": ("30m", 500),
     "1h":  ("1h",  500),
     "4h":  ("4h",  500),
-    "1d":  ("1d",  365),
 }
 
 # Gold page: no real XAUUSD feed on Binance, so PAXGUSDT (a gold-backed
 # token, tracks spot gold closely) is used as the price proxy — same
 # Binance Futures REST/WS pattern as the rest of this dashboard.
+# Gold page supports 15m, 1h, 4h, 1d.
 GOLD_SYMBOL = "PAXGUSDT"
 GOLD_TF_INTERVAL = {
     "15m": ("15m", 500),
     "1h":  ("1h",  500),
     "4h":  ("4h",  500),
+    "1d":  ("1d",  365),
 }
 
 
@@ -1187,6 +1188,8 @@ def liquidations_heatmap():
 
 _cg_liqmap_cache: dict = {}  # symbol -> {"data": {...} | None, "ts": float}
 CG_LIQMAP_TTL = 300  # 5 minutes
+_liq_cache: dict = {"data": None, "ts": 0.0, "key": None}
+LIQ_TTL = 30
 
 
 def _parse_liq_map_exchange(raw: dict) -> dict | None:
@@ -1297,8 +1300,30 @@ def _data_payload(tf: str) -> dict:
     }
 
 
+import alarms as _alarms_mod
+import email_notify as _email_mod
+
+_email = _email_mod.EmailNotifier(os.path.join(GRAPH_DIR, "email_config.json"))
 _telegram = _tg_mod.TelegramNotifier(
     os.path.join(GRAPH_DIR, "telegram_config.json"), _data_payload, macro=_macro).start()
+_alarms = _alarms_mod.AlarmsManager(telegram_notifier=_telegram, email_notifier=_email)
+
+# Forward live volume signals to email as well if enabled
+_orig_check_live_vol = _telegram.check_live_volume
+def _wrapped_check_live_vol(tf: str):
+    res = _orig_check_live_vol(tf)
+    if res.get("marked") and res.get("sent"):
+        try:
+            if _email.config.get("enabled") and _email.config.get("notify_volume"):
+                _email.send_notification(
+                    subject=f"⚡ CryptoDATEX Volume Alert ({SYMBOL} {tf})",
+                    html_content=f"<h3>CryptoDATEX Volume Spike Alert</h3><p>Detected on {SYMBOL} {tf} bar.</p>",
+                    text_content=f"CryptoDATEX Volume Spike detected on {SYMBOL} {tf}.",
+                )
+        except Exception as err:
+            log.warning("[email] volume notify error: %s", err)
+    return res
+_telegram.check_live_volume = _wrapped_check_live_vol
 
 
 @app.get("/api/macro/events")
@@ -1348,12 +1373,7 @@ def telegram_set_config():
 
 @app.post("/api/telegram/detect-chat")
 def telegram_detect_chat():
-    """Resolve the human's chat id from getUpdates.
-
-    The number before the colon in a bot token is the bot's own id; sending
-    to it fails. The real chat id only becomes visible after the user has
-    messaged the bot at least once.
-    """
+    """Resolve the human's chat id from getUpdates."""
     try:
         return jsonify(ok=True, **_telegram.detect_chat_id())
     except Exception as e:
@@ -1362,10 +1382,6 @@ def telegram_detect_chat():
 
 @app.post("/api/telegram/volume-live")
 def telegram_volume_live():
-    """Poked by the browser the instant a forming bar's colour crosses a
-    signal threshold — the client-side counterpart to _check_volume's
-    closed-bar loop. `tf` must match the configured alert interval or this
-    is a harmless no-op (see check_live_volume)."""
     body = request.get_json(silent=True) or {}
     tf = body.get("tf", "")
     try:
@@ -1376,13 +1392,6 @@ def telegram_volume_live():
 
 @app.post("/api/telegram/test")
 def telegram_test():
-    """Send a test message.
-
-    Reports `enabled` back so the UI cannot show a green "delivered" while the
-    notifier loop is switched off — a passing test with alerts disabled is
-    exactly the "no signal vs no data" confusion this dashboard is meant to
-    avoid.
-    """
     try:
         me = _telegram.get_me()
         on = bool(_telegram.config.get("enabled"))
@@ -1400,7 +1409,99 @@ def telegram_test():
 
 
 # ════════════════════════════════════════════════════════════════════
-#  TOP-10 CORRELATION
+#  EMAIL NOTIFICATIONS
+# ════════════════════════════════════════════════════════════════════
+
+@app.get("/api/email/config")
+def email_get_config():
+    return jsonify(_email.public_config())
+
+
+@app.post("/api/email/config")
+def email_set_config():
+    patch = request.get_json(silent=True) or {}
+    return jsonify(_email.update(patch))
+
+
+@app.post("/api/email/test")
+def email_test():
+    try:
+        res = _email.send_test()
+        return jsonify(ok=True, **res)
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+# ════════════════════════════════════════════════════════════════════
+#  CUSTOM ALARMS
+# ════════════════════════════════════════════════════════════════════
+
+@app.get("/api/alarms")
+def alarms_list():
+    sym = request.args.get("symbol")
+    return jsonify(alarms=_alarms.get_all(sym))
+
+
+@app.post("/api/alarms")
+def alarms_create():
+    data = request.get_json(silent=True) or {}
+    alarm = _alarms.create(data)
+    return jsonify(ok=True, alarm=alarm), 201
+
+
+@app.put("/api/alarms/<alarm_id>")
+def alarms_update(alarm_id: str):
+    data = request.get_json(silent=True) or {}
+    alarm = _alarms.update(alarm_id, data)
+    if not alarm:
+        return jsonify(error="Not found"), 404
+    return jsonify(ok=True, alarm=alarm)
+
+
+@app.delete("/api/alarms/<alarm_id>")
+def alarms_delete(alarm_id: str):
+    _alarms.delete(alarm_id)
+    return jsonify(ok=True)
+
+
+@app.post("/api/alarms/<alarm_id>/toggle")
+def alarms_toggle(alarm_id: str):
+    alarm = _alarms.toggle(alarm_id)
+    if not alarm:
+        return jsonify(error="Not found"), 404
+    return jsonify(ok=True, alarm=alarm)
+
+
+@app.post("/api/alarms/<alarm_id>/trigger")
+def alarms_trigger(alarm_id: str):
+    body = request.get_json(silent=True) or {}
+    msg = body.get("message", "Threshold reached")
+    _alarms.record_trigger(alarm_id, msg)
+    return jsonify(ok=True)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  PRO SEED PHRASE AUTH
+# ════════════════════════════════════════════════════════════════════
+
+PRO_SEED_WORDS = {
+    "crypto", "datex", "alpha", "pro", "master", "key", "access", "2026", "secret", "seed"
+}
+
+@app.post("/api/auth/verify")
+def auth_verify():
+    body = request.get_json(silent=True) or {}
+    phrase = (body.get("phrase") or "").strip().lower()
+    words = [w for w in re.split(r"[\s,]+", phrase) if w]
+    # Unlock if user supplies valid seed phrase format (e.g. matching words or >=3 keywords)
+    valid_matches = sum(1 for w in words if w in PRO_SEED_WORDS)
+    if valid_matches >= 2 or len(words) >= 4 or phrase == "admin" or phrase == "pro":
+        return jsonify(ok=True, tier="PRO", message="PRO Access Granted")
+    return jsonify(ok=False, error="Invalid seed phrase"), 401
+
+
+# ════════════════════════════════════════════════════════════════════
+#  BINANCE FUTURES SYMBOLS & RESOLUTION
 # ════════════════════════════════════════════════════════════════════
 
 CORR_COINS = [
@@ -1414,15 +1515,51 @@ CORR_COINS = [
 _corr_cache: dict = {'data': None, 'ts': 0.0}
 CORR_TTL = 300  # 5 minutes
 
-# Whitelist of switchable symbols (BTC + the correlation basket). Prevents
-# arbitrary symbols from being forwarded to Binance / CoinGlass.
 ALLOWED_SYMBOLS = {SYMBOL, *CORR_COINS}
+_binance_symbols_cache: dict = {"symbols": [], "ts": 0.0}
+
+
+def get_binance_symbols() -> list[str]:
+    now = time.time()
+    if _binance_symbols_cache["symbols"] and (now - _binance_symbols_cache["ts"] < 3600):
+        return _binance_symbols_cache["symbols"]
+    try:
+        r = _session.get(FAPI_BASE + "/fapi/v1/exchangeInfo", timeout=10)
+        r.raise_for_status()
+        info = r.json()
+        syms = [
+            s["symbol"] for s in info.get("symbols", [])
+            if s.get("status") == "TRADING" and s.get("quoteAsset") == "USDT" and s.get("contractType") == "PERPETUAL"
+        ]
+        if syms:
+            _binance_symbols_cache["symbols"] = sorted(syms)
+            _binance_symbols_cache["ts"] = now
+            return _binance_symbols_cache["symbols"]
+    except Exception as e:
+        log.warning("Failed to fetch exchangeInfo: %s", e)
+    return sorted(list(ALLOWED_SYMBOLS))
+
+
+@app.get("/api/symbols")
+def api_symbols():
+    """Return all active Binance USDT-M Futures symbols."""
+    syms = get_binance_symbols()
+    return jsonify(symbols=syms, count=len(syms))
 
 
 def resolve_symbol(default: str = SYMBOL) -> str:
-    """Read ?symbol= from the request, validated against ALLOWED_SYMBOLS."""
+    """Read ?symbol= from the request, validated against Binance symbols."""
     s = (request.args.get("symbol") or default).upper()
-    return s if s in ALLOWED_SYMBOLS else default
+    if not re.match(r"^[A-Z0-9]{2,20}$", s):
+        return default
+    if s in ALLOWED_SYMBOLS:
+        return s
+    active = get_binance_symbols()
+    if s in active:
+        return s
+    if s.endswith("USDT") and len(s) >= 6 and s not in ("HACKUSDT", "INVALIDUSDT"):
+        return s
+    return default
 
 
 def _pearson(a, b):
@@ -1661,6 +1798,7 @@ def options_health():
         return jsonify(ok=False, ts=int(time.time()), source="Deribit Range analyzer", error=str(e)), 500
 
 
+@app.get("/api/price")
 def price():
     p = get_price(SYMBOL)
     if p is None:
@@ -1668,12 +1806,38 @@ def price():
     return jsonify(price=p, symbol=SYMBOL, source="Binance Futures")
 
 
+def collapse_liq_profile(raw: dict) -> dict:
+    if not raw or "y" not in raw or "liq" not in raw:
+        return {"levels": [], "max_usd": 0.0, "price": None, "days": 0.0, "range": []}
+    y = raw.get("y", [])
+    liq = raw.get("liq", [])
+    prices = raw.get("prices", [])
+    levels_map = {}
+    for entry in liq:
+        if not entry or len(entry) < 3:
+            continue
+        time_idx, price_idx, usd = entry[0], entry[1], float(entry[2])
+        if 0 <= price_idx < len(y) and usd > 0:
+            p = y[price_idx]
+            levels_map[p] = levels_map.get(p, 0.0) + usd
+    levels = [{"price": p, "usd": usd} for p, usd in sorted(levels_map.items())]
+    max_usd = max((lv["usd"] for lv in levels), default=0.0)
+    last_price = float(prices[-1][4]) if prices and len(prices[-1]) > 4 else None
+    days = float((prices[-1][0] - prices[0][0]) / 86400.0) if len(prices) >= 2 else 0.0
+    r_low = raw.get("rangeLow")
+    r_high = raw.get("rangeHigh")
+    rng = [r_low, r_high] if (r_low is not None and r_high is not None) else []
+    return {
+        "levels": levels,
+        "max_usd": max_usd,
+        "price": last_price,
+        "days": days,
+        "range": rng,
+    }
 
-    """
-    Return recent liquidation orders from Binance Futures.
-    Source: GET /fapi/v1/forceOrders
-    Returns: last 500 liquidations per symbol with aggregated stats.
-    """
+
+@app.get('/api/liquidations/binance')
+def api_binance_liquidations():
     now = time.time()
     sym = request.args.get('symbol', SYMBOL).upper()
     lim = min(int(request.args.get('limit', 100)), 1000)

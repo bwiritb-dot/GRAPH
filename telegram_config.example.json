@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "token": "YOUR_TELEGRAM_BOT_TOKEN",
+  "chat_id": "YOUR_TELEGRAM_CHAT_ID",
+  "symbol": "BTCUSDT",
+  "interval": "5m",
+  "vol_multiple": 2.0,
+  "vol_buy_ratio": 0.7,
+  "vol_ma_length": 20,
+  "notify_volume": true,
+  "notify_macro": true,
+  "macro_lead_minutes": 15
+}

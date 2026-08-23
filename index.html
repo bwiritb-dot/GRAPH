@@ -31,14 +31,27 @@
     </div>
     <div class="header-divider"></div>
     <nav class="page-switcher" aria-label="Dashboard pages">
-      <a class="page-link active" data-path="/" href="/">Futures</a>
-      <a class="page-link" data-path="/options" href="/options">Options</a>
-      <a class="page-link" data-path="/orderbook" href="/orderbook">Order Book</a>
+      <a class="page-link active" data-path="/" href="/">Crypto</a>
+      <a class="page-link" data-path="/options" href="/options" style="display:none">Options</a>
+      <a class="page-link" data-path="/orderbook" href="/orderbook" style="display:none">Order Book</a>
       <a class="page-link" data-path="/gold" href="/gold">Gold</a>
     </nav>
     <div class="header-divider"></div>
 
-    <!-- Timeframe selector buttons in Header -->
+    <!-- Symbol Selector & Search -->
+    <div class="symbol-selector-wrap" id="symbol-selector-wrap">
+      <button class="symbol-select-btn" id="symbol-select-btn" title="Выбрать крипто-фьючерс Binance">
+        <span id="active-symbol-btn-txt">BTCUSDT</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="symbol-dropdown" id="symbol-dropdown">
+        <input type="text" class="symbol-search-input" id="symbol-search-input" placeholder="Поиск (BTC, ETH, SOL, PEPE...)" autocomplete="off">
+        <div class="symbol-list" id="symbol-list"></div>
+      </div>
+    </div>
+    <div class="header-divider"></div>
+
+    <!-- Timeframe selector buttons in Header (5m .. 4h, 1d removed) -->
     <div class="hdr-tf-bar" id="hdr-tf-bar">
       <span class="tf-label-title">TF:</span>
       <button class="tf-btn active" data-tf="5m">5m</button>
@@ -46,7 +59,6 @@
       <button class="tf-btn" data-tf="30m">30m</button>
       <button class="tf-btn" data-tf="1h">1h</button>
       <button class="tf-btn" data-tf="4h">4h</button>
-      <button class="tf-btn" data-tf="1d">1d</button>
     </div>
 
     <div class="header-divider"></div>
@@ -66,6 +78,16 @@
       <div class="wc-item"><span class="wc-flag">🇺🇸</span><span class="wc-city">NYC</span><span class="wc-time" id="wc-nyc">--:--:--</span></div>
     </div>
     <div class="header-divider"></div>
+    <!-- Feature Buttons: Pro / Alarms / Email / Telegram -->
+    <div id="tier-badge-container">
+      <span class="free-badge" id="tier-badge" title="Нажмите для ввода сид-фразы и активации PRO">FREE TIER 🔑</span>
+    </div>
+    <button class="btn-refresh" id="btn-alarms" title="Управление алертами и звуками">
+      🔔 Alerts
+    </button>
+    <button class="btn-refresh" id="btn-email" title="Email-уведомления">
+      ✉️ Email
+    </button>
     <button class="btn-refresh" id="btn-telegram" title="Telegram-уведомления">
       <span class="tg-dot" id="tg-dot"></span>
       Telegram
@@ -210,20 +232,6 @@
                 <td class="ind-cell" id="tc-4h-dmm">—</td>
                 <td class="ind-cell" id="tc-4h-cmf">—</td>
               </tr>
-              <tr id="itr-1d">
-                <td class="tf-label">1d</td>
-                <td class="ind-cell" id="tc-1d-wt1">—</td>
-                <td class="ind-cell" id="tc-1d-mlmi">—</td>
-                <td class="ind-cell" id="tc-1d-rsi">—</td>
-                <td class="ind-cell" id="tc-1d-mfi">—</td>
-                <td class="ind-cell" id="tc-1d-cci">—</td>
-                <td class="ind-cell" id="tc-1d-willr">—</td>
-                <td class="ind-cell" id="tc-1d-uo">—</td>
-                <td class="ind-cell" id="tc-1d-adx">—</td>
-                <td class="ind-cell" id="tc-1d-dmp">—</td>
-                <td class="ind-cell" id="tc-1d-dmm">—</td>
-                <td class="ind-cell" id="tc-1d-cmf">—</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -278,11 +286,178 @@
     </div>
   </div>
 
+  <!-- ══ MODAL: ALARMS & SOUND LIBRARY ═════════════════════════════ -->
+  <div class="cdx-modal-backdrop" id="modal-alarms">
+    <div class="cdx-modal" style="max-width: 580px;">
+      <div class="cdx-modal-hdr">
+        <div class="cdx-modal-title">🔔 Управление алертами и звуками</div>
+        <button class="cdx-modal-close" onclick="window.AlarmsUI?.close()">&times;</button>
+      </div>
+      <div class="cdx-modal-body">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:11px; font-weight:700; color:var(--text-primary);">АКТИВНЫЕ АЛЕРТЫ</span>
+          <button class="btn-cdx-primary" id="btn-create-alarm" onclick="window.AlarmsUI?.showCreateForm()">+ Новый алерт</button>
+        </div>
+        
+        <div id="alarm-create-form" style="display:none; background:#161a26; padding:12px; border-radius:8px; border:1px solid var(--border);">
+          <div style="font-weight:700; font-size:11px; margin-bottom:10px; color:var(--btc-orange);" id="alarm-form-title">Создание алерта</div>
+          <div class="cdx-form-row">
+            <div class="cdx-form-group">
+              <label class="cdx-form-label">Символ</label>
+              <input type="text" class="cdx-form-input" id="alarm-symbol" value="BTCUSDT">
+            </div>
+            <div class="cdx-form-group">
+              <label class="cdx-form-label">Тип триггера</label>
+              <select class="cdx-form-select" id="alarm-type" onchange="window.AlarmsUI?.onTypeChange()">
+                <option value="price_cross_above">Цена >= уровню</option>
+                <option value="price_cross_below">Цена <= уровню</option>
+                <option value="rsi_ob">RSI >= перекупленность</option>
+                <option value="rsi_os">RSI <= перепроданность</option>
+                <option value="adx_trend">ADX >= тренд (сила)</option>
+                <option value="vol_spike">Всплеск объема (x MA20)</option>
+                <option value="hvn_touch">Касание зоны HVN</option>
+                <option value="macro_lead">Макро-событие (за N мин)</option>
+              </select>
+            </div>
+          </div>
+          <div class="cdx-form-row" style="margin-top:8px;">
+            <div class="cdx-form-group">
+              <label class="cdx-form-label">Значение порога / Цель</label>
+              <input type="number" step="any" class="cdx-form-input" id="alarm-threshold" placeholder="Значение (напр. 95000)">
+            </div>
+            <div class="cdx-form-group">
+              <label class="cdx-form-label">Звуковой сигнал</label>
+              <div style="display:flex; gap:6px;">
+                <select class="cdx-form-select" id="alarm-sound" style="flex:1;">
+                  <option value="ping">🎯 Radar Ping</option>
+                  <option value="chime">🔔 Double Chime</option>
+                  <option value="siren">🚨 High Alert Siren</option>
+                  <option value="ding">💰 Cash Ding</option>
+                  <option value="bass">🔊 Sub Bass Thud</option>
+                  <option value="pager">📟 Digital Pager</option>
+                  <option value="laser">⚡ Sci-Fi Sweep</option>
+                  <option value="pulse">⚠️ Urgent Pulse</option>
+                </select>
+                <button class="btn-cdx-sec" type="button" onclick="window.AlarmsUI?.previewSound()" title="Прослушать">▶</button>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:12px; font-size:11px; color:var(--text-sec);">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="alarm-ch-audio" checked> Звук в браузере
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="alarm-ch-tg" checked> Telegram
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="alarm-ch-email"> Email
+            </label>
+          </div>
+          <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+            <button class="btn-cdx-sec" type="button" onclick="window.AlarmsUI?.hideCreateForm()">Отмена</button>
+            <button class="btn-cdx-primary" type="button" onclick="window.AlarmsUI?.saveAlarm()">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="alarms-list" id="alarms-list">
+          <div style="font-size:11px; color:var(--text-dim); text-align:center; padding:15px;">Загрузка алертов...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: EMAIL SETTINGS ═════════════════════════════════════ -->
+  <div class="cdx-modal-backdrop" id="modal-email">
+    <div class="cdx-modal">
+      <div class="cdx-modal-hdr">
+        <div class="cdx-modal-title">✉️ Настройка Email-уведомлений</div>
+        <button class="cdx-modal-close" onclick="window.EmailUI?.close()">&times;</button>
+      </div>
+      <div class="cdx-modal-body">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:11px; cursor:pointer;">
+          <input type="checkbox" id="email-enabled"> Включить отправку на Email
+        </label>
+        
+        <div class="cdx-form-row">
+          <div class="cdx-form-group">
+            <label class="cdx-form-label">SMTP Сервер</label>
+            <input type="text" class="cdx-form-input" id="email-smtp-host" placeholder="smtp.gmail.com">
+          </div>
+          <div class="cdx-form-group">
+            <label class="cdx-form-label">SMTP Порт</label>
+            <input type="number" class="cdx-form-input" id="email-smtp-port" placeholder="587 / 465" value="587">
+          </div>
+        </div>
+        <div class="cdx-form-row">
+          <div class="cdx-form-group">
+            <label class="cdx-form-label">Логин / Email отправителя</label>
+            <input type="email" class="cdx-form-input" id="email-user" placeholder="your-email@gmail.com">
+          </div>
+          <div class="cdx-form-group">
+            <label class="cdx-form-label">Пароль / App Password</label>
+            <input type="password" class="cdx-form-input" id="email-password" placeholder="••••••••••••">
+          </div>
+        </div>
+        <div class="cdx-form-group">
+          <label class="cdx-form-label">Email получателя</label>
+          <input type="email" class="cdx-form-input" id="email-to" placeholder="recipient@example.com">
+        </div>
+
+        <div style="font-size:10px; color:var(--text-sec); border-top:1px solid var(--border); padding-top:10px;">
+          <strong>Отправлять при событиях:</strong>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="email-notify-volume" checked> Всплески объема (Volume Spike 5m)
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="email-notify-macro" checked> Макро-анонсы и результаты Actual
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="email-notify-alarms" checked> Сработавшие пользовательские алерты
+            </label>
+          </div>
+        </div>
+
+        <div id="email-status-msg" style="font-size:11px; font-family:'JetBrains Mono',monospace;"></div>
+      </div>
+      <div class="cdx-modal-footer">
+        <button class="btn-cdx-sec" type="button" onclick="window.EmailUI?.sendTest()">✉️ Отправить тест</button>
+        <button class="btn-cdx-primary" type="button" onclick="window.EmailUI?.save()">Сохранить настройки</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: PRO SEED PHRASE UNLOCK ═════════════════════════════ -->
+  <div class="cdx-modal-backdrop" id="modal-pro">
+    <div class="cdx-modal" style="max-width: 440px;">
+      <div class="cdx-modal-hdr">
+        <div class="cdx-modal-title">🔑 Разблокировка PRO Доступа</div>
+        <button class="cdx-modal-close" onclick="window.ProAuth?.close()">&times;</button>
+      </div>
+      <div class="cdx-modal-body">
+        <div class="cdx-form-hint">
+          Введите секретную сид-фразу для получения полного доступа ко всем индикаторам (WTMO, MLMI, MFI, CCI, W%R, UO, CMF, CVD, DEPTH), тепловым картам ликвидаций и расширенным инструментам.
+        </div>
+        <div class="cdx-form-group">
+          <label class="cdx-form-label">Сид-фраза доступа</label>
+          <textarea class="cdx-form-input" id="pro-seed-phrase" rows="3" placeholder="Введите слова сид-фразы через пробел..."></textarea>
+        </div>
+        <div id="pro-unlock-msg" style="font-size:11px; font-family:'JetBrains Mono',monospace;"></div>
+      </div>
+      <div class="cdx-modal-footer">
+        <button class="btn-cdx-sec" type="button" onclick="window.ProAuth?.close()">Отмена</button>
+        <button class="btn-cdx-primary" type="button" onclick="window.ProAuth?.submitPhrase()">Разблокировать PRO</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- #app -->
 
 <script src="js/zones.js"></script>
 <script src="js/ruler.js"></script>
 <script src="js/macro.js"></script>
+<script src="js/alarms-ui.js"></script>
+<script src="js/email-ui.js"></script>
 <script src="js/telegram-ui.js"></script>
 <script src="js/main.js"></script>
 </body>

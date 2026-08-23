@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "use_tls": true,
+  "use_ssl": false,
+  "user": "test@example.com",
+  "password": "secretpassword",
+  "to": "trader@example.com",
+  "notify_volume": true,
+  "notify_macro": true,
+  "notify_macro_actual": true,
+  "notify_alarms": true
+}
