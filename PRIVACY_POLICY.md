@@ -1,33 +1,65 @@
-# Privacy Policy for CryptoDATEX Chrome Extension
+# Privacy Policy — CryptoDATEX Chrome Extension
 
-**Last Updated: August 2026**
+Last updated: 20 September 2026
 
-CryptoDATEX ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy outlines how the CryptoDATEX Chrome Extension handles user data.
+CryptoDATEX is a charting and technical-analysis tool for Binance USDT-M
+futures and the PAXG/USDT gold-backed token. It runs entirely inside your
+browser. There is no CryptoDATEX server, account or login.
 
----
+## What the extension stores
 
-### 1. Single Purpose & Data Minimization
-CryptoDATEX is a technical analysis and market data terminal designed to display real-time cryptocurrency futures and macroeconomic analytics directly within your browser.
+All data below is created by you and stays on your device (Chrome's
+`chrome.storage.local` and the extension's `localStorage`). It is never sent
+to us or to anyone else. Uninstalling the extension deletes it.
 
-### 2. Information We Collect (Zero Personal Data Collection)
-- **No Personal Identification Information (PII):** We do not collect names, email addresses, phone numbers, IP addresses, browsing histories, or cryptographic private keys.
-- **No Keystroke Tracking:** We do not record or monitor your keystrokes or inputs on third-party websites.
-- **No Financial Data:** We do not connect directly to your trading account API secret keys, nor do we execute trades on your behalf.
+- Chart settings: selected symbol, timeframe, active indicator tab.
+- Price alerts you create (symbol, threshold, sound, enabled/disabled).
+- Drawings you place on the chart (lines, boxes, long/short position boxes).
+- Demo portfolios and paper-trading entries you record (hypothetical trades;
+  no real funds, no exchange account).
+- Position of the drawing toolbar.
 
-### 3. Permissions Used & Purpose
-- **`storage`**: Used exclusively to store your personal terminal preferences (theme choices, selected symbols, and custom alarm thresholds) locally on your device using `chrome.storage.local`.
-- **`alarms`**: Used to schedule background intervals to evaluate price and indicator threshold alerts without consuming CPU cycles.
-- **`notifications`**: Used exclusively to trigger native desktop notifications when user-configured price or volume conditions are met.
+## What the extension sends
 
-### 4. Third-Party Data Requests
-The extension makes direct, read-only requests to publicly accessible cryptocurrency market endpoints:
-- Public Binance Futures REST & WebSocket endpoints (`fapi.binance.com`) for market tickers, order book depth, and k-lines.
-- Your local/hosted CryptoDATEX backend instance for custom indicator calculations (WTMO, MLMI/kNN, liquidation clusters).
+The extension makes read-only requests for public market data to Binance:
 
-No user data is ever sold, rented, or transferred to third-party data brokers or advertising networks.
+- `https://fapi.binance.com` — candles, tickers and the exchange symbol list (REST).
+- `wss://fstream.binance.com` — live candle and trade stream (WebSocket).
 
-### 5. Compliance with Chrome Web Store Policies
-CryptoDATEX complies fully with the **Chrome Web Store User Data Policy**, including the Limited Use requirements.
+These requests contain only the market symbol and timeframe. No account
+credentials, API keys, personal information or usage statistics are sent.
+Binance may log the request as any web server does; see Binance's own
+privacy policy for how it handles such logs.
 
-### 6. Contact & Inquiries
-For questions regarding this policy or technical inquiries, contact: `support@cryptodatex.com` or visit our repository documentation.
+## What we do not do
+
+- We do not collect names, e-mail addresses, IP addresses, browsing history,
+  keystrokes or any personally identifiable information.
+- We do not ask for or store exchange API keys, wallet keys or seed phrases.
+- We do not place trades. Paper trading is a local simulation only.
+- We do not use analytics, advertising or tracking of any kind.
+- We do not sell, share or transfer any data.
+
+## Permissions
+
+- `storage` — save the settings, alerts, drawings and paper trades listed above.
+- `alarms` — check your price alerts once per minute in the background.
+- `notifications` — show a desktop notification when one of your alerts triggers.
+- Host permission `https://fapi.binance.com/*` — fetch public market data.
+
+## Compliance
+
+Use of information received from Google APIs adheres to the Chrome Web Store
+User Data Policy, including the Limited Use requirements.
+
+CryptoDATEX is an independent tool and is not affiliated with or endorsed by
+Binance. It is an educational tool and does not provide financial advice.
+
+## Changes
+
+If this policy changes, the new version is published at the same address with
+an updated date.
+
+## Contact
+
+cryptodatex@gmail.com
